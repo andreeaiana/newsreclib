@@ -1,0 +1,44 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: mind_rec_bert_sent.yaml
+  - override /model: cen_news_rec.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["cenewsrec", "mindsmall", "pretrainedemb", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "small"
+
+model:
+  use_plm: False
+  pretrained_embeddings_path: ${paths.data_dir}MINDsmall_train/transformed_word_embeddings.npy
+  embed_dim: 300
+  num_heads: 20
+  num_filters: 400
+  window_size: 3
+  query_dim: 200
+  dropout_probability: 0.2
+
+callbacks:
+  early_stopping:
+    patience: 5
+
+trainer:
+  max_epochs: 20
+
+logger:
+  wandb:
+    name: "cenewsrec_mindsmall_pretrainedemb_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

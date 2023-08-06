@@ -1,0 +1,70 @@
+_target_: newsreclib.data.mind_news_datamodule.MINDNewsDataModule
+
+# dataframe settings
+dataset_size: large # choose from 'large' or 'small'
+# URLs for downloading the dataset
+dataset_url:
+  large:
+    train: "https://mind201910small.blob.core.windows.net/release/MINDlarge_train.zip"
+    dev: "https://mind201910small.blob.core.windows.net/release/MINDlarge_dev.zip"
+  small:
+    train: "https://mind201910small.blob.core.windows.net/release/MINDsmall_train.zip"
+    dev: "https://mind201910small.blob.core.windows.net/release/MINDsmall_dev.zip"
+pretrained_embeddings_url: "https://nlp.stanford.edu/data/glove.840B.300d.zip"
+
+# File names and paths
+data_dir: ${paths.data_dir}
+word_embeddings_dirname: glove
+word_embeddings_fpath: ${paths.data_dir}/glove/glove.840B.300d.txt
+entity_embeddings_filename: "entity_embedding.vec"
+
+# Data preprocessing
+dataset_attributes:
+  - "title"
+  - "abstract"
+  - "category"
+  - "subcategory"
+  - "title_entities"
+  - "abstract_entities"
+  - "category_class"
+  - "subcategory_class"
+  - "sentiment_class"
+  - "sentiment_score"
+
+id2index_filenames:
+  word2index: "word2index.tsv"
+  entity2index: "entity2index.tsv"
+  categ2index: "categ2index.tsv"
+  subcateg2index: "subcateg2index.tsv"
+  sentiment2index: "sentiment2index.tsv"
+  uid2index: "uid2index.tsv"
+
+use_plm: False
+use_pretrained_categ_embeddings: True
+word_embed_dim: 300
+categ_embed_dim: 300
+entity_embed_dim: 100
+entity_freq_threshold: 2
+entity_conf_threshold: 0.5
+
+sentiment_annotator: null
+
+valid_time_split: "2019-11-14 00:00:00" # interactions with timestamp before this data will be used for training
+
+# dataset settings
+neg_sampling_ratio: 4
+max_title_len: 30
+max_abstract_len: 50
+max_history_len: 50
+concatenate_inputs: False
+tokenizer_name: null
+tokenizer_use_fast: null
+tokenizer_max_len: null
+aspect: null
+
+# Datamodule parameters
+samples_per_class: 20
+batch_size: 60
+num_workers: 0
+pin_memory: True
+drop_last: False

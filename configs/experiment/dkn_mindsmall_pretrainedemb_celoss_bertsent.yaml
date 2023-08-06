@@ -1,0 +1,38 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: mind_rec_bert_sent.yaml
+  - override /model: dkn.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["dkn", "mindsmall", "pretrainedemb", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "small"
+
+model:
+  pretrained_word_embeddings_path: ${paths.data_dir}MINDsmall_train/transformed_word_embeddings.npy
+  pretrained_entity_embeddings_path: ${paths.data_dir}MINDsmall_train/transformed_entity_embeddings.npy
+
+callbacks:
+  early_stopping:
+    patience: 5
+
+trainer:
+  max_epochs: 20
+
+logger:
+  wandb:
+    name: "dkn_mindsmall_pretrainedemb_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

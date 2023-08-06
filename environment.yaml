@@ -1,0 +1,63 @@
+# reasons you might want to use `environment.yaml` instead of `requirements.txt`:
+# - pip installs packages in a loop, without ensuring dependencies across all packages
+#   are fulfilled simultaneously, but conda achieves proper dependency control across
+#   all packages
+# - conda allows for installing packages without requiring certain compilers or
+#   libraries to be available in the system, since it installs precompiled binaries
+
+name: newsreclib_env
+channels:
+  - pytorch
+  - pyg
+  - nvidia
+  - conda-forge
+  - defaults
+
+# it is strongly recommended to specify versions of packages installed through conda
+# to avoid situation when version-unspecified packages install their latest major
+# versions which can sometimes break things
+
+# current approach below keeps the dependencies in the same major versions across all
+# users, but allows for different minor and patch versions of packages where backwards
+# compatibility is usually guaranteed
+
+dependencies:
+  - colorcet=3.*
+  - hydra-core=1.*
+  - lightning=2.*
+  - MulticoreTSNE=0.*
+  - numpy=1.*
+  - omegaconf=2.*
+  - pandas=1.*
+  - pre-commit=3.*
+  - pyg=2.*
+  - pytorch=2.*
+  - torchaudio=2.*
+  - torchvision=0.15.*
+  - pytorch-cuda=11.8
+  - pytorch-lightning=2.*
+  - pytorch-metric-learning=2.*
+  - requests=2.*
+  - rich=13.*
+  - scikit-learn=1.*
+  - seaborn=0.*
+  - sphinx=5.*
+  - tokenizers=0.*
+  - torchaudio=2.*
+  - torchmetrics=0.*
+  - tqdm=4.*
+  - transformers=4.*
+  - wandb=0.*
+  - yaml=0.*
+
+  - pip>=23
+  - pip:
+    - hydra-colorlog==1.*
+    - hydra-optuna-sweeper==1.*
+    - optuna==2.*
+    - pyrootutils==1.*
+    - pytest==7.*
+    - retrying==1.*
+    - sentencepiece==0.1.*
+    - vadersentiment==3.*
+prefix: /home/ma/ma_ma/ma_aiana/.conda/envs/newsreclib_env

@@ -1,0 +1,5 @@
+defaults:
+  - mind_rec.yaml
+
+sentiment_annotator:
+  _target_: newsreclib.data.components.sentiment_annotator.VADERSentimentAnnotator

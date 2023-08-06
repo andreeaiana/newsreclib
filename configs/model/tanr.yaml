@@ -1,0 +1,54 @@
+_target_: newsreclib.models.general_rec.tanr_module.TANRModule
+
+# training strategy
+dual_loss_training: False
+dual_loss_coef: null
+loss: "cross_entropy_loss"
+late_fusion: False
+temperature: None
+
+# news encoder
+dataset_attributes: ${data.dataset_attributes}
+attributes2encode: ["title"]
+use_plm: False
+
+# text encoder
+pretrained_embeddings_path: null
+plm_model: null
+frozen_layers: null
+embed_dim: 300
+num_heads: 15
+num_filters: 400
+window_size: 3
+query_dim: 200
+dropout_probability: 0.2
+
+# topic prediction
+topic_pred_loss_coef: 0.2
+
+# outputs
+outputs:
+  train: ["preds", "targets", "cand_news_size"]
+  val: ["preds", "targets", "cand_news_size"]
+  test:
+    [
+      "preds",
+      "targets",
+      "cand_news_size",
+      "hist_news_size",
+      "target_categories",
+      "target_sentiments",
+      "hist_categories",
+      "hist_sentiments",
+    ]
+
+# evaluation
+num_categ_classes: 18
+num_sent_classes: 3
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.0001
+
+scheduler: null

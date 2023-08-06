@@ -1,0 +1,70 @@
+_target_: newsreclib.models.fair_rec.senti_debias_module.SentiDebiasModule
+
+# discriminator
+discriminator:
+  _target_: newsreclib.models.fair_rec.senti_debias_module.Discriminator
+  input_dim: 300
+  hidden_dim: 256
+  output_dim: 3
+
+# generator
+generator:
+  _target_: newsreclib.models.fair_rec.senti_debias_module.Generator
+  # training strategy
+  late_fusion: False
+  # news encoder
+  dataset_attributes: ${data.dataset_attributes}
+  attributes2encode: ["title"]
+  use_plm: False
+  # text encoder
+  pretrained_embeddings_path: null
+  plm_model: null
+  frozen_layers: null
+  embed_dim: 300
+  num_heads: 15
+  query_dim: 200
+  dropout_probability: 0.2
+  # sentiment encoder
+  sentiment_encoder:
+    _target_: newsreclib.models.components.encoders.news.aspect.SentimentEncoder
+    num_sent_classes: 3
+    sent_embed_dim: 256
+    sent_output_dim: 300
+
+# outputs
+outputs:
+  train: ["preds", "targets", "cand_news_size"]
+  val: ["preds", "targets", "cand_news_size"]
+  test:
+    [
+      "preds",
+      "targets",
+      "cand_news_size",
+      "hist_news_size",
+      "target_categories",
+      "target_sentiments",
+      "hist_categories",
+      "hist_sentiments",
+    ]
+
+# loss coefficients
+alpha_coefficient: 0.15
+beta_coefficient: 10
+
+# evaluation
+num_categ_classes: 18
+num_sent_classes: 3
+
+optimizer: null
+
+optimizer_generator:
+  _target_: torch.optim.Adam
+  _partial_: True
+  lr: 0.00001
+
+optimizer_discriminator:
+  _target_: torch.optim.Adam
+  _partial_: True
+  lr: 0.00002
+
+scheduler: null

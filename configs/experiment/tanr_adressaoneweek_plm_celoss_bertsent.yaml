@@ -1,0 +1,48 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: adressa_rec.yaml
+  - override /model: tanr.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["tanr", "adressa_oneweek", "plm", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "one_week"
+  use_plm: True
+  tokenizer_name: NbAiLab/nb-bert-base
+  tokenizer_use_fast: True
+  tokenizer_max_len: 96
+  batch_size: 8
+
+model:
+  use_plm: True
+  plm_model: "NbAiLab/nb-bert-base"
+  frozen_layers: [0, 1, 2, 3, 4, 5, 6, 7]
+  embed_dim: 768
+  num_heads: 16
+  query_dim: 200
+  dropout_probability: 0.2
+
+callbacks:
+  early_stopping:
+    patience: 3
+
+trainer:
+  max_epochs: 10
+
+logger:
+  wandb:
+    name: "tanr_adressa_oneweek_plm_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

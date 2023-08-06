@@ -1,0 +1,48 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: mind_news_bert_sent.yaml
+  - override /model: manner_a_module.yaml
+  - override /callbacks: default.yaml
+  - override /logger: wandb.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["manner_a_module", "sent", "mindsmall", "plm", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "small"
+  use_plm: True
+  tokenizer_name: roberta-base
+  tokenizer_use_fast: True
+  tokenizer_max_len: 96
+  aspect: "sentiment"
+  batch_size: 60
+  concatenate_inputs: True
+
+model:
+  temperature: 0.9
+  plm_model: "roberta-base"
+  frozen_layers: [0, 1, 2, 3, 4, 5, 6, 7]
+  labels_path: ${paths.data_dir}MINDsmall_train/sentiment2index.tsv
+  pretrained_entity_embeddings_path: ${paths.data_dir}MINDsmall_train/transformed_entity_embeddings.npy
+
+callbacks:
+  early_stopping:
+    patience: 10
+
+trainer:
+  max_epochs: 100
+
+logger:
+  wandb:
+    name: "manner_a_module_sent_mindsmall_plm_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

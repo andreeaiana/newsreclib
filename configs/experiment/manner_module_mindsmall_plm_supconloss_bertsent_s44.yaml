@@ -1,0 +1,42 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: mind_rec_bert_sent.yaml
+  - override /model: manner_module.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["manner_module", "mindsmall", "plm", "celoss", "bertsent"]
+
+seed: 44
+
+train: False
+
+data:
+  dataset_size: "small"
+  use_plm: True
+  tokenizer_name: roberta-base
+  tokenizer_use_fast: True
+  tokenizer_max_len: 96
+  concatenate_inputs: True
+  batch_size: 8
+
+model:
+  cr_module_module_ckpt: ""
+  a_module_categ_ckpt: ""
+  a_module_sent_ckpt: ""
+  categ_weight: 0
+  sent_weight: 0
+
+logger:
+  wandb:
+    name: "manner_module_mindsmall_plm_celoss_bertsent_s44"
+    tags: ${tags}
+    group: "mind"

@@ -1,0 +1,49 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: adressa_rec.yaml
+  - override /model: caum.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["caum", "adressa_oneweek", "plm", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "one_week"
+  use_plm: True
+  tokenizer_name: NbAiLab/nb-bert-base
+  tokenizer_use_fast: True
+  tokenizer_max_len: 96
+  batch_size: 8
+
+model:
+  use_plm: True
+  attributes2encode: ["title", "category"]
+  use_entities: False
+  plm_model: "NbAiLab/nb-bert-base"
+  frozen_layers: [0, 1, 2, 3, 4, 5, 6, 7]
+  text_embed_dim: 768
+  text_num_heads: 16
+  pretrained_entity_embeddings_path: ${paths.data_dir}Adressa_oneweek/transformed_entity_embeddings.npy
+
+callbacks:
+  early_stopping:
+    patience: 3
+
+trainer:
+  max_epochs: 10
+
+logger:
+  wandb:
+    name: "caum_adressa_oneweek_plm_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

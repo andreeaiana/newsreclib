@@ -1,0 +1,47 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: adressa_rec.yaml
+  - override /model: lstur.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["lsturcon", "adressa_oneweek", "pretrainedemb", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "one_week"
+
+model:
+  use_plm: False
+  attributes2encode: ["title", "category"]
+  pretrained_embeddings_path: ${paths.data_dir}Adressa_one_week/transformed_word_embeddings.npy
+  text_embed_dim: 300
+  num_heads: 15
+  num_filters: 300
+  window_size: 3
+  query_dim: 200
+  dropout_probability: 0.2
+  num_users: 83762
+  long_short_term_method: "con" # choose between "ini" and "con"
+
+callbacks:
+  early_stopping:
+    patience: 5
+
+trainer:
+  max_epochs: 20
+
+logger:
+  wandb:
+    name: "lsturcon_adressa_oneweek_pretrainedemb_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

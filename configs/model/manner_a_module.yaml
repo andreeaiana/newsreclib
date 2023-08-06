@@ -1,0 +1,32 @@
+_target_: newsreclib.models.fair_rec.manner_a_module.AModule
+
+# training strategy
+temperature: 0.1
+
+# news encoder
+dataset_attributes: ${data.dataset_attributes}
+attributes2encode: ["title", "abstract", "title_entities", "abstract_entities"]
+labels_path: null
+
+# text encoder
+plm_model: null
+frozen_layers: null
+text_embed_dim: 768
+num_heads: 10
+query_dim: 200
+dropout_probability: 0.2
+use_entities: True
+pretrained_entity_embeddings_path: null
+entity_embed_dim: 100
+
+# outputs
+outputs:
+  val: ["embeddings", "labels"]
+  test: ["embeddings", "labels"]
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.00001
+
+scheduler: null

@@ -1,0 +1,38 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: adressa_rec.yaml
+  - override /model: npa.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["npa", "adressa_oneweek", "pretrainedemb", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "one_week"
+
+model:
+  pretrained_embeddings_path: ${paths.data_dir}Adressa_one_week/transformed_word_embeddings.npy
+  num_users: 83762
+
+callbacks:
+  early_stopping:
+    patience: 5
+
+trainer:
+  max_epochs: 20
+
+logger:
+  wandb:
+    name: "npa_adressa_oneweek_pretrainedemb_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

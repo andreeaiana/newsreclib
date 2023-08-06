@@ -1,0 +1,68 @@
+_target_: newsreclib.data.adressa_news_datamodule.AdressaNewsDataModule
+
+seed: ${seed}
+
+# dataframe settings
+dataset_size: one_week # choose from 'three_month' or 'one_week'
+
+# URLs for downloading the dataset
+dataset_url:
+  three_month: "https://reclab.idi.ntnu.no/dataset/three_month.tar.gz"
+  one_week: "https://reclab.idi.ntnu.no/dataset/one_week.tar.gz"
+pretrained_embeddings_url: "https://bpemb.h-its.org/no/no.wiki.bpe.vs200000.d300.w2v.txt.tar.gz"
+
+# File names and paths
+data_dir: ${paths.data_dir}
+word_embeddings_dirname: glove
+word_embeddings_fpath: ${paths.data_dir}/glove/no.wiki.bpe.vs200000.d300.w2v.txt
+
+# Data preprocessing
+dataset_attributes:
+  - "title"
+  - "category"
+  - "subcategory"
+  - "category_class"
+  - "subcategory_class"
+  - "sentiment_class"
+  - "sentiment_score"
+
+id2index_filenames:
+  word2index: "word2index.tsv"
+  categ2index: "categ2index.tsv"
+  subcateg2index: "subcateg2index.tsv"
+  sentiment2index: "sentiment2index.tsv"
+  uid2index: "uid2index.tsv"
+  nid2index: "nid2index.tsv"
+
+use_plm: False
+use_pretrained_categ_embeddings: True
+word_embed_dim: 300
+categ_embed_dim: 300
+
+sentiment_annotator:
+  _target_: newsreclib.data.components.sentiment_annotator.BERTSentimentAnnotator
+  model_name: "cardiffnlp/twitter-xlm-roberta-base-sentiment"
+  tokenizer_max_len: 96
+
+train_date_split: 6
+test_date_split: 7
+neg_num: 20
+user_dev_size: 0.2
+
+# dataset settings
+neg_sampling_ratio: 4
+max_title_len: 30
+max_abstract_len: 50
+max_history_len: 50
+concatenate_inputs: False
+tokenizer_name: null
+tokenizer_use_fast: null
+tokenizer_max_len: null
+aspect: null
+
+# Datamodule parameters
+samples_per_class: 20
+batch_size: 60
+num_workers: 0
+pin_memory: True
+drop_last: False

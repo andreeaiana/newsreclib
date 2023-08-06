@@ -1,0 +1,32 @@
+Hyperparameter Optimization
+===========================
+
+NewsRecLib supports hyperparameter optimization by integrating the functionalities
+of the `Optuna <https://optuna.org/>`_ library through the
+`Optuna Sweeper plugin <https://hydra.cc/docs/plugins/optuna_sweeper/>`_ of
+`Hydra <https://hydra.cc/>`_.
+
+This is an example that shows how to perform hyperparameter optimization.
+
+.. code:: yaml
+
+   defaults:
+     - override /hydra/sweeper: optuna
+   optimized_metric: "val/acc_best"
+   hydra:
+     mode: "MULTIRUN"
+     sweeper:
+       _target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
+       storage: null
+       study_name: null
+       n_jobs: 1
+       direction: minimize
+       n_trials: 20
+     sampler:
+       _target_: optuna.samplers.TPESampler
+       seed: 1234
+       n_startup_trials: 10
+     params:
+       data.neg_sampling_ratio: range(1, 10, step=1)
+       model.lr: choice(1e-4, 1e-5, 1e-6)
+       model.temperature: interval(0.0, 1.0)

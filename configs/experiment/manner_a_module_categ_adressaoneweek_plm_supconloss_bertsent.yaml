@@ -1,0 +1,51 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: adressa_news.yaml
+  - override /model: manner_a_module.yaml
+  - override /callbacks: default.yaml
+  - override /logger: wandb.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags:
+  ["manner_a_module", "categ", "adressa_oneweek", "plm", "celoss", "bertsent"]
+
+seed: 42
+
+data:
+  dataset_size: "one_week"
+  use_plm: True
+  tokenizer_name: NbAiLab/nb-bert-base
+  tokenizer_use_fast: True
+  tokenizer_max_len: 96
+  aspect: "category"
+  batch_size: 90
+  samples_per_class: 5
+  concatenate_inputs: True
+
+model:
+  temperature: 0.9
+  attributes2encode: ["title"]
+  plm_model: "NbAiLab/nb-bert-base"
+  frozen_layers: [0, 1, 2, 3, 4, 5, 6, 7]
+  labels_path: ${paths.data_dir}Adressa_one_week/categ2index.tsv
+  use_entities: False
+
+callbacks:
+  early_stopping:
+    patience: 10
+
+trainer:
+  max_epochs: 100
+
+logger:
+  wandb:
+    name: "manner_a_module_categ_adressa_oneweek_plm_celoss_bertsent_s42"
+    tags: ${tags}
+    group: "mind"

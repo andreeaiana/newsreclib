@@ -1,0 +1,47 @@
+_target_: newsreclib.models.general_rec.dkn_module.DKNModule
+
+# training strategy
+dual_loss_training: False
+dual_loss_coef: null
+loss: "cross_entropy_loss"
+late_fusion: False
+temperature: None
+
+# news encoder
+pretrained_word_embeddings_path: null
+pretrained_entity_embeddings_path: null
+text_embed_dim: 300
+entity_embed_dim: 100
+num_filters: 100
+window_sizes: [1, 2, 3, 4]
+use_context: True
+
+# user encoder
+hidden_dim_dnn: 16
+
+# outputs
+outputs:
+  train: ["preds", "targets", "cand_news_size"]
+  val: ["preds", "targets", "cand_news_size"]
+  test:
+    [
+      "preds",
+      "targets",
+      "cand_news_size",
+      "hist_news_size",
+      "target_categories",
+      "target_sentiments",
+      "hist_categories",
+      "hist_sentiments",
+    ]
+
+# evaluation
+num_categ_classes: 18
+num_sent_classes: 3
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.0001
+
+scheduler: null
