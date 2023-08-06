@@ -2,7 +2,7 @@
 
 # NewsRecLib
 
-[![python](https://img.shields.io/badge/-Python_3.8_%7C_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
+[![python](https://img.shields.io/badge/-Python_3.9_%7C_3.10-blue?logo=python&logoColor=white)](https://github.com/pre-commit/pre-commit)
 [![pytorch](https://img.shields.io/badge/PyTorch_2.0+-ee4c2c?logo=pytorch&logoColor=white)](https://pytorch.org/get-started/locally/)
 [![lightning](https://img.shields.io/badge/-Lightning_2.0+-792ee5?logo=pytorchlightning&logoColor=white)](https://pytorchlightning.ai/)
 [![torchmetrics](https://img.shields.io/badge/-TorchMetrics_2.0+-792ee5?logo=torchmetrics&logoColor=white)](https://lightning.ai/docs/pytorch/stable/ecosystem/metrics.html)
@@ -14,7 +14,7 @@
 
 </div>
 
-NewsRecLib is a library based on [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) and \[Hydra=(https://hydra.cc/)
+NewsRecLib is a library based on [PyTorch Lightning](https://lightning.ai/docs/pytorch/stable/) and [Hydra](https://hydra.cc/)
 for the development and evaluation of neural news recommenders (NNR).
 The framework is highly configurable and modularized, decoupling core model components from one another.
 It enables running experiments from a single configuration file that navigates the pipeline from dataset selection and loading
@@ -28,7 +28,7 @@ The foremost goals of NewsRecLib are to promote *reproducible research* and *rig
 
 ## Installation
 
-NewsRecLib requires Python version 3.8 or later.
+NewsRecLib requires Python version 3.9 or later.
 
 NewsRecLib requires PyTorch, PyTorch Lightning, and TorchMetrics version 2.0 or later.
 If you want to use NewsRecLib with GPU, please ensure CUDA or cudatoolkit version of 11.8.
