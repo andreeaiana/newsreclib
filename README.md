@@ -170,6 +170,14 @@ Alternatively, configurations can be overridden from the command line, as follow
 We welcome all contributions to NewsRecLib! You can get involved by contributing code, making improvements to the documentation,
 reporting or investigating [bugs and issues](https://github.com/andreeaiana/newsreclib/issues).
 
+## Resources
+This repository was inspired by:
+- https://github.com/ashleve/lightning-hydra-template
+- https://github.com/MeteSertkan/newsrec
+
+Other useful repositories:
+- https://github.com/recommenders-team/recommenders
+
 ## License
 
 NewsRecLib uses a [MIT License](./LICENSE).
@@ -179,18 +187,13 @@ NewsRecLib uses a [MIT License](./LICENSE).
 We did our best to provide all the bibliographic information of the methods, models, datasets, and techniques available in NewsRecLib
 to credit their authors. Please remember to cite them if you use NewsRecLib in your research.
 
-If you use NewsRecLib, please cite:
+If you use NewsRecLib, please cite the following publication:
 
 ```
-@software{newsreclib2023,
-  author    = {Andreea Iana and
-               Goran Glavaš and
-               Heiko Paulheim},
-  title     = {NewsRecLib: {A} PyTorch-Lightning Library for Neural News Recommendation},
-  url       = {https://github.com/andreeaiana/newsreclib},
-  version   = {0.1},
-  doi       = {10.1145/3404835.3463245},
-  year      = {2023},
+@article{iana2023newsreclib,
+      title={NewsRecLib: A PyTorch-Lightning Library for Neural News Recommendation}, 
+      author={Iana, Andreea and Glava{\v{s}}, Goran and Paulheim, Heiko},
+      journal={arXiv preprint arXiv:2310.01146},
+      year={2023}
 }
-
 ```
