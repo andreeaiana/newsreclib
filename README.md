@@ -139,7 +139,7 @@ Alternatively, configurations can be overridden from the command line, as follow
 - **Datasets**
   - [Adreesa](https://dl.acm.org/doi/pdf/10.1145/3106426.3109436): 1-week and 3-months
   - [MIND](https://aclanthology.org/2020.acl-main.331.pdf): MINDsmall and MINDlarge
-  - [xmIND](https://github.com/andreeaiana/xMIND): all languages, dataset sizes and splits
+  - [xMIND](https://github.com/andreeaiana/xMIND): all languages, dataset sizes and splits
 - **Recommendation Models**
   - General recommenders (GeneralRec)
     - [CAUM](https://dl.acm.org/doi/pdf/10.1145/3477495.3531778) ([code](newsreclib/models/general_rec/caum_module.py), [config](configs/model/caum.yaml))
