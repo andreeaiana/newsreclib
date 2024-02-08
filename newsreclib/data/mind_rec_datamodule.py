@@ -74,7 +74,7 @@ class MINDRecDataModule(LightningDataModule):
         entity_conf_threshold:
             Minimum confidence for an entity to be included in the processed dataset.
         sentiment_annotator:
-            The sentiment annotaor module used.
+            The sentiment annotator module used.
         valid_time_split:
             A string with the date before which click behaviors are included in the train set. After this date, behaviors are included in the validation set.
         max_title_len:

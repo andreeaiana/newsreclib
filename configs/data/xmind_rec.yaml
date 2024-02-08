@@ -1,0 +1,63 @@
+_target_: newsreclib.data.xmind_rec_datamodule.xMINDRecDataModule
+
+# dataframe settings
+dataset_size: large # choose from 'large' or 'small'
+
+# URLs for downloading the MIND dataset
+mind_dataset_url:
+  large:
+    train: "https://mind201910small.blob.core.windows.net/release/MINDlarge_train.zip"
+    dev: "https://mind201910small.blob.core.windows.net/release/MINDlarge_dev.zip"
+  small:
+    train: "https://mind201910small.blob.core.windows.net/release/MINDsmall_train.zip"
+    dev: "https://mind201910small.blob.core.windows.net/release/MINDsmall_dev.zip"
+
+# File names and paths
+data_dir: ${paths.data_dir}
+entity_embeddings_filename: "entity_embedding.vec"
+
+# Data preprocessing
+dataset_attributes:
+  - "title"
+  - "abstract"
+  - "category"
+  - "subcategory"
+  - "title_entities"
+  - "abstract_entities"
+  - "category_class"
+  - "subcategory_class"
+
+id2index_filenames:
+  entity2index: "entity2index.tsv"
+  categ2index: "categ2index.tsv"
+  subcateg2index: "subcateg2index.tsv"
+  uid2index: "uid2index.tsv"
+
+entity_embed_dim: 100
+entity_freq_threshold: 2
+entity_conf_threshold: 0.5
+
+valid_time_split: "2019-11-14 00:00:00" # interactions with timestamp before this data will be used for training
+
+# bilingual settings
+tgt_lang: null
+bilingual_train: null
+pct_tgt_lang_train: null
+bilingual_test: null
+pct_tgt_lang_test: null
+
+# dataset settings
+neg_sampling_ratio: 4
+max_title_len: 30
+max_abstract_len: 50
+max_history_len: 50
+concatenate_inputs: False
+tokenizer_name: "xlm-roberta-base"
+tokenizer_use_fast: null
+tokenizer_max_len: null
+
+# Datamodule parameters
+batch_size: 64
+num_workers: 0
+pin_memory: True
+drop_last: False

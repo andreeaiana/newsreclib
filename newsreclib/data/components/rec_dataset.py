@@ -263,7 +263,9 @@ class DatasetCollate:
         batch_out["category"] = category
         batch_out["subcategory"] = subcategory
 
-        if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+        if ("sentiment_class" in self.dataset_attributes) or (
+            "sentiment_score" in self.dataset_attributes
+        ):
             sentiment = torch.from_numpy(df["sentiment_class"].values).long()
             sentiment_score = torch.from_numpy(df["sentiment_score"].values).float()
 

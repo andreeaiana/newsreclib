@@ -65,7 +65,7 @@ class AdressaNewsDataModule(LightningDataModule):
         word_embed_dim:
             Dimensionality of word embeddings.
         sentiment_annotator:
-            The sentiment annotaor module used.
+            The sentiment annotator module used.
         train_date_split:
             A string with the date before which click behaviors are included in the history of a user.
         test_date_split:

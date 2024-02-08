@@ -26,7 +26,7 @@ class MANNERModule(AbstractRecommneder):
         outputs:
             A dictionary of user-defined attributes needed for metric calculation at the end of each `*_step` of the pipeline.
         cr_module_module_ckpt:
-            The chekpoint of the CR-Module.
+            The checkpoint of the CR-Module.
         a_module_categ_ckpt:
             The checkpoint of the category-based A-Module.
         a_module_sent_ckpt:

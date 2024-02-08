@@ -64,7 +64,7 @@ class AdressaDataFrame(Dataset):
         word_embed_dim:
             Dimensionality of word embeddings.
         sentiment_annotator:
-            The sentiment annotaor module used.
+            The sentiment annotator module used.
         train_date_split:
             A string with the date before which click behaviors are included in the history of a user.
         test_date_split:
@@ -428,7 +428,7 @@ class AdressaDataFrame(Dataset):
         )
 
         if file_utils.check_integrity(parsed_behaviors_file):
-            # beaviors data already parsed
+            # behaviors data already parsed
             log.info(f"User behaviors data already parsed. Loading from {parsed_behaviors_file}.")
             behaviors = pd.read_table(
                 filepath_or_buffer=parsed_behaviors_file,

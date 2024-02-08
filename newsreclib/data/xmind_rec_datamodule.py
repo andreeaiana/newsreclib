@@ -3,15 +3,18 @@ from typing import Any, Dict, List, Optional
 import torch.nn as nn
 from lightning import LightningDataModule
 from omegaconf.dictconfig import DictConfig
-from pytorch_metric_learning.samplers import MPerClassSampler
 from torch.utils.data import DataLoader, Dataset
 from transformers import AutoTokenizer
 
-from newsreclib.data.components.mind_dataframe import MINDDataFrame
-from newsreclib.data.components.news_dataset import DatasetCollate, NewsDataset
+from newsreclib.data.components.rec_dataset import (
+    DatasetCollate,
+    RecommendationDatasetTest,
+    RecommendationDatasetTrain,
+)
+from newsreclib.data.components.xmind_dataframe import xMINDDataFrame
 
 
-class MINDNewsDataModule(LightningDataModule):
+class xMINDRecDataModule(LightningDataModule):
     """Example of LightningDataModule for the MIND dataset.
 
     A DataModule implements 6 key methods:
@@ -40,38 +43,32 @@ class MINDNewsDataModule(LightningDataModule):
     Attributes:
         dataset_size:
             A string indicating the type of the dataset. Choose between `large` and `small`.
-        dataset_url:
-            Dictionary of URLs for downloading the `train` and `dev` datasets for the specified `dataset_size`.
+        mind_dataset_url:
+            Dictionary of URLs for downloading the MIND `train` and `dev` datasets for the specified `dataset_size`.
         data_dir:
             Path to the data directory.
+        tgt_lang:
+            Target language for the xMIND dataset.
+        bilingual_train:
+            Whether the user history and the candidates list is bilingual (or monolingual in target language) or monolingual in source language in training.
+        pct_tgt_lang_train:
+            The percentage of news in the target language in the bilingual user history and candidates list in training.
+        bilingual_test:
+            Whether the user history and the candidates list is bilingual (or monolingual in target language) or monolingual in source language in test.
+        pct_tgt_lang_test:
+            The percentage of news in the target language in the bilingual user history and candidates list in test.
         dataset_attributes:
             List of news features available in the used dataset (e.g., title, category, etc.).
         id2index_filenames:
             Dictionary mapping id2index dictionary to corresponding filenames.
-        pretrained_embeddings_url:
-            URL for downloading pretrained word embeddings (e.g., Glove).
-        word_embeddings_dirname:
-            Directory where to download and extract the pretrained word embeddings.
-        word_embeddings_fpath:
-            Filepath to the pretrained word embeddings.
         entity_embeddings_filename:
             Filepath to the pretrained entity embeddings.
-        use_plm:
-            If ``True``, it will process the data for a petrained language model (PLM) in the news encoder. If ``False``, it will tokenize the news title and abstract to be used initialized with pretrained word embeddings.
-        use_pretrained_categ_embeddings:
-            Whether to initialize category embeddings with pretrained word embeddings.
-        categ_embed_dim:
-            Dimensionality of category embeddings.
-        word_embed_dim:
-            Dimensionality of word embeddings.
         entity_embed_dim:
             Dimensionality of entity embeddings.
         entity_freq_threshold:
             Minimum frequency for an entity to be included in the processed dataset.
         entity_conf_threshold:
             Minimum confidence for an entity to be included in the processed dataset.
-        sentiment_annotator:
-            The sentiment annotator module used.
         valid_time_split:
             A string with the date before which click behaviors are included in the train set. After this date, behaviors are included in the validation set.
         max_title_len:
@@ -90,10 +87,6 @@ class MINDNewsDataModule(LightningDataModule):
             Maximum history length.
         neg_sampling_ratio:
             Number of negatives per positive sample for training.
-        aspect:
-            Aspect to be used as label (e.g., `category`, `sentiment`)
-        samples_per_class:
-            Number of samples per class per batch.
         batch_size:
             How many samples per batch to load.
         num_workers:
@@ -107,33 +100,28 @@ class MINDNewsDataModule(LightningDataModule):
     def __init__(
         self,
         dataset_size: str,
-        dataset_url: DictConfig,
+        mind_dataset_url: DictConfig,
         data_dir: str,
+        tgt_lang: str,
+        bilingual_train: bool,
+        pct_tgt_lang_train: Optional[float],
+        bilingual_test: bool,
+        pct_tgt_lang_test: Optional[float],
         dataset_attributes: List[str],
         id2index_filenames: DictConfig,
-        pretrained_embeddings_url: Optional[str],
-        word_embeddings_dirname: Optional[str],
-        word_embeddings_fpath: Optional[str],
         entity_embeddings_filename: str,
-        use_plm: bool,
-        use_pretrained_categ_embeddings: bool,
-        categ_embed_dim: Optional[int],
-        word_embed_dim: Optional[int],
         entity_embed_dim: int,
         entity_freq_threshold: int,
         entity_conf_threshold: float,
-        sentiment_annotator: nn.Module,
         valid_time_split: str,
         max_title_len: int,
         max_abstract_len: int,
         concatenate_inputs: bool,
-        tokenizer_name: Optional[str],
-        tokenizer_use_fast: Optional[bool],
-        tokenizer_max_len: Optional[int],
+        tokenizer_name: str,
+        tokenizer_use_fast: bool,
+        tokenizer_max_len: int,
         max_history_len: int,
         neg_sampling_ratio: float,
-        aspect: str,
-        samples_per_class: int,
         batch_size: int,
         num_workers: int,
         pin_memory: bool,
@@ -149,18 +137,11 @@ class MINDNewsDataModule(LightningDataModule):
         self.data_val: Optional[Dataset] = None
         self.data_test: Optional[Dataset] = None
 
-        if self.hparams.use_plm:
-            assert isinstance(self.hparams.tokenizer_name, str)
-            assert isinstance(self.hparams.tokenizer_use_fast, bool)
-            assert (
-                isinstance(self.hparams.tokenizer_max_len, int)
-                and self.hparams.tokenizer_max_len > 0
-            )
-            self.tokenizer = AutoTokenizer.from_pretrained(
-                self.hparams.tokenizer_name,
-                use_fast=self.hparams.tokenizer_use_fast,
-                model_max=self.hparams.tokenizer_max_len,
-            )
+        self.tokenizer = AutoTokenizer.from_pretrained(
+            self.hparams.tokenizer_name,
+            use_fast=self.hparams.tokenizer_use_fast,
+            model_max_length=self.hparams.tokenizer_max_len,
+        )
 
     def prepare_data(self):
         """Download data if needed.
@@ -168,53 +149,43 @@ class MINDNewsDataModule(LightningDataModule):
         Do not use it to assign state (self.x = y).
         """
         # download train set
-        MINDDataFrame(
+        xMINDDataFrame(
             dataset_size=self.hparams.dataset_size,
-            dataset_url=self.hparams.dataset_url,
+            mind_dataset_url=self.hparams.mind_dataset_url,
             data_dir=self.hparams.data_dir,
+            tgt_lang=self.hparams.tgt_lang,
+            bilingual=self.hparams.bilingual_train,
+            pct_tgt_lang=self.hparams.pct_tgt_lang_train,
             dataset_attributes=self.hparams.dataset_attributes,
             id2index_filenames=self.hparams.id2index_filenames,
-            pretrained_embeddings_url=self.hparams.pretrained_embeddings_url,
-            word_embeddings_dirname=self.hparams.word_embeddings_dirname,
-            word_embeddings_fpath=self.hparams.word_embeddings_fpath,
             entity_embeddings_filename=self.hparams.entity_embeddings_filename,
-            use_plm=self.hparams.use_plm,
-            use_pretrained_categ_embeddings=self.hparams.use_pretrained_categ_embeddings,
-            categ_embed_dim=self.hparams.categ_embed_dim,
-            word_embed_dim=self.hparams.word_embed_dim,
             entity_embed_dim=self.hparams.entity_embed_dim,
             entity_freq_threshold=self.hparams.entity_freq_threshold,
             entity_conf_threshold=self.hparams.entity_conf_threshold,
-            sentiment_annotator=self.hparams.sentiment_annotator,
             valid_time_split=self.hparams.valid_time_split,
             train=True,
             validation=False,
-            download=True,
+            download_mind=True,
         )
 
         # download validation set
-        MINDDataFrame(
+        xMINDDataFrame(
             dataset_size=self.hparams.dataset_size,
-            dataset_url=self.hparams.dataset_url,
+            mind_dataset_url=self.hparams.mind_dataset_url,
             data_dir=self.hparams.data_dir,
+            tgt_lang=self.hparams.tgt_lang,
+            bilingual=self.hparams.bilingual_test,
+            pct_tgt_lang=self.hparams.pct_tgt_lang_test,
             dataset_attributes=self.hparams.dataset_attributes,
             id2index_filenames=self.hparams.id2index_filenames,
-            pretrained_embeddings_url=self.hparams.pretrained_embeddings_url,
-            word_embeddings_dirname=self.hparams.word_embeddings_dirname,
-            word_embeddings_fpath=self.hparams.word_embeddings_fpath,
             entity_embeddings_filename=self.hparams.entity_embeddings_filename,
-            use_plm=self.hparams.use_plm,
-            use_pretrained_categ_embeddings=self.hparams.use_pretrained_categ_embeddings,
-            categ_embed_dim=self.hparams.categ_embed_dim,
-            word_embed_dim=self.hparams.word_embed_dim,
             entity_embed_dim=self.hparams.entity_embed_dim,
             entity_freq_threshold=self.hparams.entity_freq_threshold,
             entity_conf_threshold=self.hparams.entity_conf_threshold,
-            sentiment_annotator=self.hparams.sentiment_annotator,
             valid_time_split=self.hparams.valid_time_split,
             train=False,
             validation=False,
-            download=True,
+            download_mind=True,
         )
 
     def setup(self, stage: Optional[str] = None):
@@ -225,90 +196,78 @@ class MINDNewsDataModule(LightningDataModule):
         """
         # load and split datasets only if not loaded already
         if not self.data_train and not self.data_val and not self.data_test:
-            trainset = MINDDataFrame(
+            trainset = xMINDDataFrame(
                 dataset_size=self.hparams.dataset_size,
-                dataset_url=self.hparams.dataset_url,
+                mind_dataset_url=self.hparams.mind_dataset_url,
                 data_dir=self.hparams.data_dir,
+                tgt_lang=self.hparams.tgt_lang,
+                bilingual=self.hparams.bilingual_train,
+                pct_tgt_lang=self.hparams.pct_tgt_lang_train,
                 dataset_attributes=self.hparams.dataset_attributes,
                 id2index_filenames=self.hparams.id2index_filenames,
-                pretrained_embeddings_url=self.hparams.pretrained_embeddings_url,
-                word_embeddings_dirname=self.hparams.word_embeddings_dirname,
-                word_embeddings_fpath=self.hparams.word_embeddings_fpath,
                 entity_embeddings_filename=self.hparams.entity_embeddings_filename,
-                use_plm=self.hparams.use_plm,
-                use_pretrained_categ_embeddings=self.hparams.use_pretrained_categ_embeddings,
-                categ_embed_dim=self.hparams.categ_embed_dim,
-                word_embed_dim=self.hparams.word_embed_dim,
                 entity_embed_dim=self.hparams.entity_embed_dim,
                 entity_freq_threshold=self.hparams.entity_freq_threshold,
                 entity_conf_threshold=self.hparams.entity_conf_threshold,
-                sentiment_annotator=self.hparams.sentiment_annotator,
                 valid_time_split=self.hparams.valid_time_split,
                 train=True,
                 validation=False,
-                download=False,
+                download_mind=False,
             )
-            validset = MINDDataFrame(
+
+            validset = xMINDDataFrame(
                 dataset_size=self.hparams.dataset_size,
-                dataset_url=self.hparams.dataset_url,
+                mind_dataset_url=self.hparams.mind_dataset_url,
                 data_dir=self.hparams.data_dir,
+                tgt_lang=self.hparams.tgt_lang,
+                bilingual=self.hparams.bilingual_train,
+                pct_tgt_lang=self.hparams.pct_tgt_lang_train,
                 dataset_attributes=self.hparams.dataset_attributes,
                 id2index_filenames=self.hparams.id2index_filenames,
-                pretrained_embeddings_url=self.hparams.pretrained_embeddings_url,
-                word_embeddings_dirname=self.hparams.word_embeddings_dirname,
-                word_embeddings_fpath=self.hparams.word_embeddings_fpath,
                 entity_embeddings_filename=self.hparams.entity_embeddings_filename,
-                use_plm=self.hparams.use_plm,
-                use_pretrained_categ_embeddings=self.hparams.use_pretrained_categ_embeddings,
-                categ_embed_dim=self.hparams.categ_embed_dim,
-                word_embed_dim=self.hparams.word_embed_dim,
                 entity_embed_dim=self.hparams.entity_embed_dim,
                 entity_freq_threshold=self.hparams.entity_freq_threshold,
                 entity_conf_threshold=self.hparams.entity_conf_threshold,
-                sentiment_annotator=self.hparams.sentiment_annotator,
                 valid_time_split=self.hparams.valid_time_split,
                 train=True,
                 validation=True,
-                download=False,
+                download_mind=False,
             )
-            testset = MINDDataFrame(
+
+            testset = xMINDDataFrame(
                 dataset_size=self.hparams.dataset_size,
-                dataset_url=self.hparams.dataset_url,
+                mind_dataset_url=self.hparams.mind_dataset_url,
                 data_dir=self.hparams.data_dir,
+                tgt_lang=self.hparams.tgt_lang,
+                bilingual=self.hparams.bilingual_test,
+                pct_tgt_lang=self.hparams.pct_tgt_lang_test,
                 dataset_attributes=self.hparams.dataset_attributes,
                 id2index_filenames=self.hparams.id2index_filenames,
-                pretrained_embeddings_url=self.hparams.pretrained_embeddings_url,
-                word_embeddings_dirname=self.hparams.word_embeddings_dirname,
-                word_embeddings_fpath=self.hparams.word_embeddings_fpath,
                 entity_embeddings_filename=self.hparams.entity_embeddings_filename,
-                use_plm=self.hparams.use_plm,
-                use_pretrained_categ_embeddings=self.hparams.use_pretrained_categ_embeddings,
-                categ_embed_dim=self.hparams.categ_embed_dim,
-                word_embed_dim=self.hparams.word_embed_dim,
                 entity_embed_dim=self.hparams.entity_embed_dim,
                 entity_freq_threshold=self.hparams.entity_freq_threshold,
                 entity_conf_threshold=self.hparams.entity_conf_threshold,
-                sentiment_annotator=self.hparams.sentiment_annotator,
                 valid_time_split=self.hparams.valid_time_split,
                 train=False,
                 validation=False,
-                download=False,
+                download_mind=False,
             )
 
-            self.data_train = NewsDataset(
+            self.data_train = RecommendationDatasetTrain(
                 news=trainset.news,
                 behaviors=trainset.behaviors,
-                aspect=self.hparams.aspect,
+                max_history_len=self.hparams.max_history_len,
+                neg_sampling_ratio=self.hparams.neg_sampling_ratio,
             )
-            self.data_val = NewsDataset(
+            self.data_val = RecommendationDatasetTest(
                 news=validset.news,
                 behaviors=validset.behaviors,
-                aspect=self.hparams.aspect,
+                max_history_len=self.hparams.max_history_len,
             )
-            self.data_test = NewsDataset(
+            self.data_test = RecommendationDatasetTest(
                 news=testset.news,
                 behaviors=testset.behaviors,
-                aspect=self.hparams.aspect,
+                max_history_len=self.hparams.max_history_len,
             )
 
     def train_dataloader(self):
@@ -317,18 +276,13 @@ class MINDNewsDataModule(LightningDataModule):
             batch_size=self.hparams.batch_size,
             collate_fn=DatasetCollate(
                 dataset_attributes=self.hparams.dataset_attributes,
-                use_plm=self.hparams.use_plm,
-                tokenizer=self.tokenizer if self.hparams.use_plm else None,
-                max_title_len=self.hparams.max_title_len if not self.hparams.use_plm else None,
+                use_plm=True,
+                tokenizer=self.tokenizer,
+                max_title_len=None,
                 max_abstract_len=self.hparams.max_abstract_len,
                 concatenate_inputs=self.hparams.concatenate_inputs,
             ),
-            sampler=MPerClassSampler(
-                labels=self.data_train.labels,
-                m=self.hparams.samples_per_class,
-                batch_size=self.hparams.batch_size,
-                length_before_new_iter=len(self.data_train),
-            ),
+            shuffle=True,
             num_workers=self.hparams.num_workers,
             pin_memory=self.hparams.pin_memory,
             drop_last=self.hparams.drop_last,
@@ -340,8 +294,8 @@ class MINDNewsDataModule(LightningDataModule):
             batch_size=self.hparams.batch_size,
             collate_fn=DatasetCollate(
                 dataset_attributes=self.hparams.dataset_attributes,
-                use_plm=self.hparams.use_plm,
-                tokenizer=self.tokenizer if self.hparams.use_plm else None,
+                use_plm=True,
+                tokenizer=self.tokenizer,
                 max_title_len=self.hparams.max_title_len,
                 max_abstract_len=self.hparams.max_abstract_len,
                 concatenate_inputs=self.hparams.concatenate_inputs,
@@ -358,9 +312,9 @@ class MINDNewsDataModule(LightningDataModule):
             batch_size=self.hparams.batch_size,
             collate_fn=DatasetCollate(
                 dataset_attributes=self.hparams.dataset_attributes,
-                use_plm=self.hparams.use_plm,
-                tokenizer=self.tokenizer if self.hparams.use_plm else None,
-                max_title_len=self.hparams.max_title_len if not self.hparams.use_plm else None,
+                use_plm=True,
+                tokenizer=self.tokenizer,
+                max_title_len=self.hparams.max_title_len,
                 max_abstract_len=self.hparams.max_abstract_len,
                 concatenate_inputs=self.hparams.concatenate_inputs,
             ),

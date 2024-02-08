@@ -139,6 +139,7 @@ Alternatively, configurations can be overridden from the command line, as follow
 - **Datasets**
   - [Adreesa](https://dl.acm.org/doi/pdf/10.1145/3106426.3109436): 1-week and 3-months
   - [MIND](https://aclanthology.org/2020.acl-main.331.pdf): MINDsmall and MINDlarge
+  - [xmIND](https://github.com/andreeaiana/xMIND): all languages, dataset sizes and splits
 - **Recommendation Models**
   - General recommenders (GeneralRec)
     - [CAUM](https://dl.acm.org/doi/pdf/10.1145/3477495.3531778) ([code](newsreclib/models/general_rec/caum_module.py), [config](configs/model/caum.yaml))
@@ -171,11 +172,14 @@ We welcome all contributions to NewsRecLib! You can get involved by contributing
 reporting or investigating [bugs and issues](https://github.com/andreeaiana/newsreclib/issues).
 
 ## Resources
+
 This repository was inspired by:
+
 - https://github.com/ashleve/lightning-hydra-template
 - https://github.com/MeteSertkan/newsrec
 
 Other useful repositories:
+
 - https://github.com/recommenders-team/recommenders
 
 ## License
@@ -191,7 +195,7 @@ If you use NewsRecLib, please cite the following publication:
 
 ```
 @article{iana2023newsreclib,
-      title={NewsRecLib: A PyTorch-Lightning Library for Neural News Recommendation}, 
+      title={NewsRecLib: A PyTorch-Lightning Library for Neural News Recommendation},
       author={Iana, Andreea and Glava{\v{s}}, Goran and Paulheim, Heiko},
       journal={arXiv preprint arXiv:2310.01146},
       year={2023}
