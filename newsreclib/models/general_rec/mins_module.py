@@ -63,6 +63,8 @@ class MINSModule(AbstractRecommneder):
             The number of filters used in the `GRU` in the user encoder.
         num_gru_channels:
             The number of channels used in the `GRU` in the user encoder.
+        top_k_list:
+            List of positions at which to compute rank-based metrics.
         num_categ_classes:
             The number of topical categories.
         num_sent_classes:
@@ -94,6 +96,7 @@ class MINSModule(AbstractRecommneder):
         dropout_probability: float,
         num_filters: int,
         num_gru_channels: int,
+        top_k_list: List[int],
         num_categ_classes: int,
         num_sent_classes: int,
         optimizer: torch.optim.Optimizer,
@@ -194,38 +197,45 @@ class MINSModule(AbstractRecommneder):
             {
                 "auc": AUROC(task="binary", num_classes=2),
                 "mrr": RetrievalMRR(),
-                "ndcg@5": RetrievalNormalizedDCG(k=5),
-                "ndcg@10": RetrievalNormalizedDCG(k=10),
             }
         )
+        ndcg_metrics_dict = {}
+        for k in self.hparams.top_k_list:
+            ndcg_metrics_dict["ndcg@" + str(k)] = RetrievalNormalizedDCG(top_k=k)
+        rec_metrics.add_metrics(ndcg_metrics_dict)
+
         self.train_rec_metrics = rec_metrics.clone(prefix="train/")
         self.val_rec_metrics = rec_metrics.clone(prefix="val/")
         self.test_rec_metrics = rec_metrics.clone(prefix="test/")
 
-        categ_div_metrics = MetricCollection(
-            {
-                "categ_div@5": Diversity(num_classes=self.num_categ_classes, top_k=5),
-                "categ_div@10": Diversity(num_classes=self.num_categ_classes, top_k=10),
-            }
-        )
-        sent_div_metrics = MetricCollection(
-            {
-                "sent_div@5": Diversity(num_classes=self.num_sent_classes, top_k=5),
-                "sent_div@10": Diversity(num_classes=self.num_sent_classes, top_k=10),
-            }
-        )
-        categ_pers_metrics = MetricCollection(
-            {
-                "categ_pers@5": Personalization(num_classes=self.num_categ_classes, top_k=5),
-                "categ_pers@10": Personalization(num_classes=self.num_categ_classes, top_k=10),
-            }
-        )
-        sent_pers_metrics = MetricCollection(
-            {
-                "sent_pers@5": Personalization(num_classes=self.num_sent_classes, top_k=5),
-                "sent_pers@10": Personalization(num_classes=self.num_sent_classes, top_k=10),
-            }
-        )
+        categ_div_metrics_dict = {}
+        for k in self.hparams.top_k_list:
+            categ_div_metrics_dict["categ_div@" + str(k)] = Diversity(
+                num_classes=self.num_categ_classes, top_k=k
+            )
+        categ_div_metrics = MetricCollection(categ_div_metrics_dict)
+
+        sent_div_metrics_dict = {}
+        for k in self.hparams.top_k_list:
+            sent_div_metrics_dict["sent_div@" + str(k)] = Diversity(
+                num_classes=self.num_sent_classes, top_k=k
+            )
+        sent_div_metrics = MetricCollection(sent_div_metrics_dict)
+
+        categ_pers_metrics_dict = {}
+        for k in self.hparams.top_k_list:
+            categ_pers_metrics_dict["categ_pers@" + str(k)] = Personalization(
+                num_classes=self.num_categ_classes, top_k=k
+            )
+        categ_pers_metrics = MetricCollection(categ_pers_metrics_dict)
+
+        sent_pers_metrics_dict = {}
+        for k in self.hparams.top_k_list:
+            sent_pers_metrics_dict["sent_pers@" + str(k)] = Personalization(
+                num_classes=self.num_sent_classes, top_k=k
+            )
+        sent_pers_metrics = MetricCollection(sent_pers_metrics_dict)
+
         self.test_categ_div_metrics = categ_div_metrics.clone(prefix="test/")
         self.test_sent_div_metrics = sent_div_metrics.clone(prefix="test/")
         self.test_categ_pers_metrics = categ_pers_metrics.clone(prefix="test/")

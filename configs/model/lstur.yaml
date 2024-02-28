@@ -46,6 +46,7 @@ outputs:
     ]
 
 # evaluation
+top_k_list: [5, 10]
 num_categ_classes: 18
 num_sent_classes: 3
 
