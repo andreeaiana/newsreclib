@@ -4,15 +4,25 @@ defaults:
   - _self_
   - data: null # choose datamodule with `test_dataloader()` for evaluation
   - model: null
+  - callbacks: default.yaml
   - logger: many_loggers.yaml
   - trainer: default.yaml
   - paths: default.yaml
   - extras: default.yaml
   - hydra: default.yaml
 
+  # experiment configs allow for version control of specific hyperparameters
+  # e.g. best hyperparameters for given model and datamodule
+  - experiment: null
+
+# task name, determines output directory path
 task_name: "eval"
 
+# tags to help you identify your experiments
+# you can overwrite this in experiment configs
+# overwrite from command line with `python train.py tags="[first_tag, second_tag]"`
 tags: ["eval"]
 
 # passing checkpoint path is necessary for evaluation
+# example: logs/train/runs/nrms_mindsmall_pretrainedemb_celoss_bertsent_s42/2024-03-08_07-48-40/checkpoints/last.ckpt
 ckpt_path: ???
