@@ -152,3 +152,6 @@ configs/local/default.yaml
 
 # Aim logging
 .aim
+
+outputs
+.DS_Store
