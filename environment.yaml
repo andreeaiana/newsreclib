@@ -44,7 +44,7 @@ dependencies:
   - sphinx=5.*
   - tokenizers=0.*
   - torchaudio=2.*
-  - torchmetrics=0.*
+  - torchmetrics=1.*
   - tqdm=4.*
   - transformers=4.*
   - wandb=0.*
