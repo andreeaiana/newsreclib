@@ -40,7 +40,7 @@ If you want to use NewsRecLib with GPU, please ensure CUDA or cudatoolkit versio
 ```bash
    git clone https://github.com/andreeaiana/newsreclib.git
    cd newsreclib
-   conda create --name newsreclib_env python=3.8
+   conda create --name newsreclib_env python=3.9
    conda activate newsreclib_env
    pip install -e .
 ```

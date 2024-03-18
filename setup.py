@@ -11,8 +11,9 @@ setup(
     url="https://github.com/andreeaiana/newsreclib",
     install_requires=[
         "colorcet==3.0.1",
+        "cmake==3.18.4",
         "hydra-core==1.3.2",
-        "lightning==2.0.4",
+        "lightning==2.2.1",
         "MulticoreTSNE==0.1",
         "numpy==1.25.0",
         "omegaconf==2.3.0",
