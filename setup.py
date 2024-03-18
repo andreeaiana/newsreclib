@@ -30,7 +30,7 @@ setup(
         "seaborn==0.12.2",
         "sphinx==5.0.2",
         "tokenizers==0.15.2",
-        "torchmetrics==0.11.4",
+        "torchmetrics==1.3.1",
         "tqdm==4.65.0",
         "transformers==4.38.2",
         "wandb==0.15.3",

@@ -81,6 +81,16 @@ of the corresponding modules.
         num_heads: 15
 ```
 
+For training the `NRMS` model on the `MINDlarge` dataset, execute the following command:
+
+```python
+python newsreclib/train.py experiment=nrms_mindlarge_pretrainedemb_celoss_bertsent
+```
+
+To understand how to adjust configuration files when transitioning from smaller to larger datasets, refer to the examples provided in `nrms_mindsmall_pretrainedemb_celoss_bertsent` and `nrms_mindlarge_pretrainedemb_celoss_bertsent`. These files will guide you in scaling your configurations appropriately.
+
+*Note:* The same procedure applies for the advanced configuration shown below.
+
 ## Advanced Configuration
 
 The advanced scenario depicts a more complex experimental setting.
