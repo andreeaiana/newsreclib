@@ -101,6 +101,10 @@ class DatasetCollate:
     def _tokenize_df(self, df: pd.DataFrame) -> Dict[str, Any]:
         batch_out = {}
 
+        # news IDs (i.e., keep only numeric part of unique NID)
+        nids = np.array([int(nid.split("N")[-1]) for nid in df.index.values])
+        batch_out["news_ids"] = torch.from_numpy(nids).long()
+
         if not self.concatenate_inputs:
             # prepare text
             if not self.use_plm:
