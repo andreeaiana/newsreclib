@@ -283,6 +283,10 @@ class SentiDebiasModule(AbstractRecommneder):
             The number of topical categories.
         num_sent_classes:
             The number of sentiment classes.
+        save_recs:
+            Whether to save the recommendations (i.e., candidates news and corresponding scores) to disk in JSON format.
+        recs_fpath:
+            Path where to save the list of recommendations and corresponding scores for users.
         optimizer:
             Optimizer used for model training.
         alpha_coefficient:
@@ -305,6 +309,8 @@ class SentiDebiasModule(AbstractRecommneder):
         top_k_list: List[int],
         num_categ_classes: int,
         num_sent_classes: int,
+        save_recs: bool,
+        recs_fpath: Optional[str],
         optimizer: torch.optim.Optimizer,
         alpha_coefficient: float,
         beta_coefficient: float,
@@ -322,6 +328,9 @@ class SentiDebiasModule(AbstractRecommneder):
 
         self.num_categ_classes = self.hparams.num_categ_classes + 1
         self.num_sent_classes = self.hparams.num_sent_classes + 1
+
+        if self.hparams.save_recs:
+            assert isinstance(self.hparams.recs_fpath, str)
 
         # initialize loss
         self.rec_loss = self._get_loss("cross_entropy_loss")
@@ -416,6 +425,8 @@ class SentiDebiasModule(AbstractRecommneder):
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
     ]:
         _, bias_free_scores, _, _, _ = self.forward(batch)
 
@@ -445,6 +456,9 @@ class SentiDebiasModule(AbstractRecommneder):
             [torch.where(mask_hist[n])[0].shape[0] for n in range(mask_hist.shape[0])]
         )
 
+        user_ids = batch["user_ids"]
+        cand_news_ids = batch["x_cand"]["news_ids"]
+
         return (
             preds,
             targets,
@@ -454,6 +468,8 @@ class SentiDebiasModule(AbstractRecommneder):
             target_sentiments,
             hist_categories,
             hist_sentiments,
+            user_ids,
+            cand_news_ids,
         )
 
     def training_step(self, batch: RecommendationBatch, batch_idx: int):
@@ -532,7 +548,7 @@ class SentiDebiasModule(AbstractRecommneder):
         self.training_step_outputs = self._clear_epoch_outputs(self.training_step_outputs)
 
     def validation_step(self, batch: RecommendationBatch, batch_idx: int):
-        preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(batch)
+        preds, targets, cand_news_size, _, _, _, _, _, _, _ = self.model_step(batch)
 
         # collect step outputs for metric computation
         self.val_step_outputs = self._collect_step_outputs(
@@ -581,6 +597,8 @@ class SentiDebiasModule(AbstractRecommneder):
             target_sentiments,
             hist_categories,
             hist_sentiments,
+            user_ids,
+            cand_news_ids,
         ) = self.model_step(batch)
 
         # collect step outputs for metric computation
@@ -603,6 +621,9 @@ class SentiDebiasModule(AbstractRecommneder):
 
         cand_indexes = torch.arange(cand_news_size.shape[0]).repeat_interleave(cand_news_size)
         hist_indexes = torch.arange(hist_news_size.shape[0]).repeat_interleave(hist_news_size)
+
+        user_ids = self._gather_step_outputs(self.test_step_outputs, "user_ids")
+        cand_news_ids = self._gather_step_outputs(self.test_step_outputs, "cand_news_ids")
 
         # update metrics
         self.test_rec_metrics(preds, targets, **{"indexes": cand_indexes})
@@ -631,6 +652,19 @@ class SentiDebiasModule(AbstractRecommneder):
         self.log_dict(
             self.test_sent_pers_metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True
         )
+
+        # save recommendations
+        if self.hparams.save_recs:
+            recommendations_dico = self._get_recommendations(
+                user_ids=user_ids,
+                news_ids=cand_news_ids,
+                scores=preds,
+                cand_news_size=cand_news_size,
+            )
+            print(recommendations_dico)
+            self._save_recommendations(
+                recommendations=recommendations_dico, fpath=self.hparams.recs_fpath
+            )
 
         # clear memory for the next epoch
         self.test_step_outputs = self._clear_epoch_outputs(self.test_step_outputs)
