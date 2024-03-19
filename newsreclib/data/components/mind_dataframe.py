@@ -590,7 +590,7 @@ class MINDDataFrame(Dataset):
 
             # cache parsed behaviors
             log.info(f"Caching parsed behaviors of size {len(behaviors)} to {parsed_bhv_file}.")
-            behaviors = behaviors[["user", "history", "candidates", "labels"]]
+            behaviors = behaviors[["uid", "user", "history", "candidates", "labels"]]
             file_utils.to_tsv(behaviors, parsed_bhv_file)
 
         return behaviors

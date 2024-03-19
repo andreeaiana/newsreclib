@@ -36,10 +36,13 @@ class RecommendationDatasetTrain(MINDDataFrame):
         self.max_history_len = max_history_len
         self.neg_sampling_ratio = neg_sampling_ratio
 
-    def __getitem__(self, index: Any) -> Tuple[np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray]:
+    def __getitem__(
+        self, index: Any
+    ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray]:
         bhv = self.behaviors.iloc[index]
 
-        user = np.array([int(bhv["user"])])
+        user_id = np.array([int(bhv["uid"].split("U")[-1])])
+        user_idx = np.array([int(bhv["user"])])
         history = np.array(bhv["history"])[: self.max_history_len]
         candidates = np.array(bhv["candidates"])
         labels = np.array(bhv["labels"])
@@ -49,7 +52,7 @@ class RecommendationDatasetTrain(MINDDataFrame):
         history = self.news.loc[history]
         candidates = self.news.loc[candidates]
 
-        return user, history, candidates, labels
+        return user_id, user_idx, history, candidates, labels
 
     def __len__(self) -> int:
         return len(self.behaviors)
@@ -98,10 +101,13 @@ class RecommendationDatasetTest(MINDDataFrame):
         self.behaviors = behaviors
         self.max_history_len = max_history_len
 
-    def __getitem__(self, idx: Any) -> Tuple[np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray]:
+    def __getitem__(
+        self, idx: Any
+    ) -> Tuple[np.ndarray, np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray]:
         bhv = self.behaviors.iloc[idx]
 
-        user = np.array([int(bhv["user"])])
+        user_id = np.array([int(bhv["uid"].split("U")[-1])])
+        user_idx = np.array([int(bhv["user"])])
         history = np.array(bhv["history"])[: self.max_history_len]
         candidates = np.array(bhv["candidates"])
         labels = np.array(bhv["labels"])
@@ -109,7 +115,7 @@ class RecommendationDatasetTest(MINDDataFrame):
         history = self.news.loc[history]
         candidates = self.news.loc[candidates]
 
-        return user, history, candidates, labels
+        return user_id, user_idx, history, candidates, labels
 
     def __len__(self) -> int:
         return len(self.behaviors)
@@ -140,7 +146,7 @@ class DatasetCollate:
         self.concatenate_inputs = concatenate_inputs
 
     def __call__(self, batch) -> RecommendationBatch:
-        users, histories, candidates, labels = zip(*batch)
+        user_ids, user_idx, histories, candidates, labels = zip(*batch)
 
         batch_hist = self._make_batch_asignees(histories)
         batch_cand = self._make_batch_asignees(candidates)
@@ -148,7 +154,8 @@ class DatasetCollate:
         x_hist = self._tokenize_df(pd.concat(histories))
         x_cand = self._tokenize_df(pd.concat(candidates))
         labels = torch.from_numpy(np.concatenate(labels)).float()
-        users = torch.from_numpy(np.concatenate(users)).long()
+        user_ids = torch.from_numpy(np.concatenate(user_ids)).long()
+        user_idx = torch.from_numpy(np.concatenate(user_idx)).long()
 
         return RecommendationBatch(
             batch_hist=batch_hist,
@@ -156,7 +163,8 @@ class DatasetCollate:
             x_hist=x_hist,
             x_cand=x_cand,
             labels=labels,
-            users=users,
+            user_ids=user_ids,
+            user_idx=user_idx,
         )
 
     def _tokenize_embeddings(self, text: List[List[int]], max_len: Optional[int]) -> torch.Tensor:
@@ -176,6 +184,10 @@ class DatasetCollate:
 
     def _tokenize_df(self, df: pd.DataFrame) -> Dict[str, Any]:
         batch_out = {}
+
+        # news IDs (i.e., keep only numeric part of unique NID)
+        nids = np.array([int(nid.split("N")[-1]) for nid in df.index.values])
+        batch_out["news_ids"] = torch.from_numpy(nids).long()
 
         if not self.concatenate_inputs:
             # prepare text

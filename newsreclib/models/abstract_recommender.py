@@ -1,3 +1,4 @@
+import json
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import numpy as np
@@ -154,3 +155,39 @@ class AbstractRecommneder(LightningModule):
             outputs_dict[key].clear()
 
         return outputs_dict
+
+    def _get_recommendations(
+        self,
+        user_ids: torch.Tensor,
+        news_ids: torch.Tensor,
+        scores: torch.Tensor,
+        cand_news_size: torch.Tensor,
+    ) -> Dict[int, Dict[str, List[Any]]]:
+        """Returns the recommendations and corresponding scores for the given users.
+
+        Attributes:
+            user_ids (torch.Tensor): IDs of users.
+            news_ids (torch.Tensor): IDs of the candidates news.
+            scores (torch.Tensor): Predicted scores for the candidate news.
+            cand_news_size (torch.Tensor): Number of candidate news for each user.
+
+        Returns:
+            Dict[int, Dict[str, List[Any]]]: A dictionary with user IDs as keys and an inner dictionary of recommendations and corresponding scores as values.
+        """
+        users = torch.repeat_interleave(user_ids.detach().cpu(), cand_news_size).tolist()
+        users = ["U" + str(uid) for uid in users]
+        news = ["N" + str(nid) for nid in news_ids.detach().cpu().tolist()]
+        scores = scores.detach().cpu().tolist()
+
+        # dictionary of recommendations and scores for each user
+        recommendations_dico = {}
+        for user, news, score in zip(users, news, scores):
+            if user not in recommendations_dico:
+                recommendations_dico[user] = {}
+            recommendations_dico[user][news] = score
+
+        return recommendations_dico
+
+    def _save_recommendations(self, recommendations: Dict[int, Dict[str, List[Any]]], fpath: str):
+        with open(fpath, "w") as f:
+            json.dump(recommendations, f)

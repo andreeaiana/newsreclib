@@ -18,12 +18,16 @@ outputs:
       "target_sentiments",
       "hist_categories",
       "hist_sentiments",
+      "user_ids",
+      "cand_news_ids",
     ]
 
 # evaluation
 top_k_list: [5, 10]
 num_categ_classes: 18
 num_sent_classes: 3
+save_recs: False
+recs_fpath: "${paths.output_dir}/recommendations.json"
 
 optimizer: null
 scheduler: null
