@@ -204,10 +204,11 @@ to credit their authors. Please remember to cite them if you use NewsRecLib in y
 If you use NewsRecLib, please cite the following publication:
 
 ```
-@article{iana2023newsreclib,
-      title={NewsRecLib: A PyTorch-Lightning Library for Neural News Recommendation},
-      author={Iana, Andreea and Glava{\v{s}}, Goran and Paulheim, Heiko},
-      journal={arXiv preprint arXiv:2310.01146},
-      year={2023}
+@inproceedings{iana2023newsreclib,
+  title={NewsRecLib: A PyTorch-Lightning Library for Neural News Recommendation},
+  author={Iana, Andreea and Glava{\v{s}}, Goran and Paulheim, Heiko},
+  booktitle={Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing: System Demonstrations},
+  pages={296--310},
+  year={2023}
 }
 ```
