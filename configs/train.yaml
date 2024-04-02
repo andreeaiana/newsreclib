@@ -46,6 +46,7 @@ test: True
 compile: False # Torchmetrics does not yet support pytorch 2.0 compile function because of dynamo lack of support for 'setattr'
 
 # simply provide checkpoint path to resume training
+# ckpt_path: logs/train/runs/nrms_mindsmall_pretrainedemb_celoss_bertsent_s42/2024-03-08_07-48-40/checkpoints/epoch_016.ckpt
 ckpt_path: null
 
 # seed for random number generators in pytorch, numpy and python.random

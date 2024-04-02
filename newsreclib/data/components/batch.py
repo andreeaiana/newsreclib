@@ -19,6 +19,14 @@ class RecommendationBatch(TypedDict):
             Ground truth specifying whether the news is relevant to the user.
         users:
             Users included in the batch.
+        times: Optional
+            Times for each impression
+        x_hist_ctr: Optional
+            Click through rate for history
+        x_cand_ctr: Optional
+            Click through rate for candidates
+        x_cand_rec: Optional
+            Recency for candidates
     """
 
     batch_hist: torch.Tensor
@@ -27,6 +35,10 @@ class RecommendationBatch(TypedDict):
     x_cand: Dict[str, Any]
     labels: torch.Tensor
     users: torch.Tensor
+    times: torch.Tensor
+    x_hist_ctr: torch.Tensor
+    x_cand_ctr: torch.Tensor
+    x_cand_rec: torch.Tensor
 
 
 class NewsBatch(TypedDict):
