@@ -42,63 +42,42 @@ class RecommendationDatasetTrain(MINDDataFrame):
         self.neg_sampling_ratio = neg_sampling_ratio
         self.include_ctr = include_ctr
 
-        # Load CTR information and articles publish time if required
-        if self.include_ctr:
-            self.news_metrics_bucket = pd.read_pickle('./data/news_metrics_bucket_acc.pkl')
-            self.articles_est_pb_time = pd.read_pickle('./data/articles_est_pb_time.pkl')
-        else:
-            self.articles_est_pb_time = None
-            self.articles_est_pb_time = None
-
     def __getitem__(self, index: Any) -> Tuple[np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         bhv = self.behaviors.iloc[index]
 
         user = np.array([int(bhv["user"])])
-        history = np.array(bhv["history"])[: self.max_history_len]
-        candidates = np.array(bhv["candidates"])
         labels = np.array(bhv["labels"])
         if isinstance(bhv["time"], str):
             time = datetime.strptime(bhv["time"], "%Y-%m-%d %H:%M:%S")
         else:
             time = bhv["time"]
-        candidates, labels = self._sample_candidates(candidates, labels)
 
         if self.include_ctr:
-            # Get History CTR
-            history_ctr = []
-            for idx, nid in enumerate(history):
-                try:
-                    filtered = self.news_metrics_bucket.loc[self.news_metrics_bucket["news_id"] == nid]
-                    ctr_most_recent = filtered[
-                        filtered['time_bucket_end_hour'] <= time
-                    ].iloc[0]['num_clicks_acc']
-                except:
-                    ctr_most_recent = 0
-                
-                history_ctr.append(ctr_most_recent)
-            
-            # Get Candidates CTR and Recency
-            candidates_ctr = []
-            candidates_rec = []
-            for idx, nid in enumerate(candidates):
-                 # Get Recency
-                time_obj = time.replace(tzinfo=timezone.utc)
-                time_pub = self.articles_est_pb_time[nid].replace(tzinfo=timezone.utc)
+            # -- Get History CTR
+            history_ctr = np.array(bhv["history_ctr"])[: self.max_history_len]
+            history, history_ctr = zip(*history_ctr)
+            # convert to np array
+            history = np.array(history)
+            history_ctr = np.array(history_ctr)
 
-                recency = (time_obj - time_pub).total_seconds() / 3600 # convert to hours
-                try:
-                    # Get CTR
-                    filtered = self.news_metrics_bucket.loc[self.news_metrics_bucket["news_id"] == nid]
-                    ctr_most_recent = filtered[
-                        filtered['time_bucket_end_hour'] <= time
-                    ].iloc[0]['num_clicks_acc']
+            # -- Get candidates CTR and Recency
+            candidates_ctr = np.array(bhv["candidates_ctr"])
+            candidates, candidates_ctr, candidates_rec = zip(*candidates_ctr)
+            candidates_0 = candidates
+            # convert to np array
+            candidates = np.array(candidates)
+            candidates_1 = candidates
+            labels_1 = labels
+            candidates, labels, indices = self._sample_candidates(candidates, labels)
+            candidates_2 = candidates
+            labels_2 = labels
+            candidates_ctr = np.array(candidates_ctr)[indices]
+            candidates_rec = np.array(candidates_rec)[indices]
 
-                    tup = (ctr_most_recent, recency)
-                except:
-                    tup = (0, recency)
-                
-                candidates_ctr.append(tup[0])
-                candidates_rec.append(tup[1])
+        else:
+            history = np.array(bhv["history"])[: self.max_history_len]
+            candidates = np.array(bhv["candidates"])
+            candidates, labels, _ = self._sample_candidates(candidates, labels)
 
         if history.size == 1 and history[0] == '':
             history = self._initialize_cold_start()
@@ -108,8 +87,8 @@ class RecommendationDatasetTrain(MINDDataFrame):
 
         if self.include_ctr:
             return user, history, candidates, labels, time, history_ctr, candidates_ctr, candidates_rec
-
         return user, history, candidates, labels
+
 
     def __len__(self) -> int:
         return len(self.behaviors)
@@ -149,7 +128,7 @@ class RecommendationDatasetTrain(MINDDataFrame):
         candidates = candidates[indices]
         labels = labels[indices]
 
-        return candidates, labels
+        return candidates, labels, indices
 
     def _initialize_cold_start(self):
         """
@@ -187,21 +166,12 @@ class RecommendationDatasetTest(MINDDataFrame):
         self.behaviors = behaviors
         self.max_history_len = max_history_len
         self.include_ctr = include_ctr
-
-        # Load CTR information and articles publish time if required
-        if self.include_ctr:
-            self.news_metrics_bucket = pd.read_pickle('./data/news_metrics_bucket_acc.pkl')
-            self.articles_est_pb_time = pd.read_pickle('./data/articles_est_pb_time.pkl')
-        else:
-            self.articles_est_pb_time = None
-            self.articles_est_pb_time = None
+        
 
     def __getitem__(self, idx: Any) -> Tuple[np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         bhv = self.behaviors.iloc[idx]
 
         user = np.array([int(bhv["user"])])
-        history = np.array(bhv["history"])[: self.max_history_len]
-        candidates = np.array(bhv["candidates"])
         labels = np.array(bhv["labels"])
         if isinstance(bhv["time"], str):
             time = datetime.strptime(bhv["time"], "%Y-%m-%d %H:%M:%S")
@@ -209,41 +179,23 @@ class RecommendationDatasetTest(MINDDataFrame):
             time = bhv["time"]
 
         if self.include_ctr:
-            # Get History CTR
-            history_ctr = []
-            for idx, nid in enumerate(history):
-                try:
-                    filtered = self.news_metrics_bucket.loc[self.news_metrics_bucket["news_id"] == nid]
-                    ctr_most_recent = filtered[
-                        filtered['time_bucket_end_hour'] <= time
-                    ].iloc[0]['num_clicks_acc']
-                except:
-                    ctr_most_recent = 0
-                
-                history_ctr.append(ctr_most_recent)
-            
-            # Get candidates CTR and Recency
-            candidates_ctr = []
-            candidates_rec = []
-            for idx, nid in enumerate(candidates):
-                 # Get Recency
-                time_obj = time.replace(tzinfo=timezone.utc)
-                time_pub = self.articles_est_pb_time[nid].replace(tzinfo=timezone.utc)
+            # -- Get History CTR
+            history_ctr = np.array(bhv["history_ctr"])[: self.max_history_len]
+            history, history_ctr = zip(*history_ctr)
+            # convert to np array
+            history = np.array(history)
+            history_ctr = np.array(history_ctr)
 
-                recency = (time_obj - time_pub).total_seconds() / 3600 # convert to hours
-                try:
-                    # Get CTR
-                    filtered = self.news_metrics_bucket.loc[self.news_metrics_bucket["news_id"] == nid]
-                    ctr_most_recent = filtered[
-                        filtered['time_bucket_end_hour'] <= time
-                    ].iloc[0]['num_clicks_acc']
-
-                    tup = (ctr_most_recent, recency)
-                except:
-                    tup = (0, recency)
-                
-                candidates_ctr.append(tup[0])
-                candidates_rec.append(tup[1])
+            # -- Get candidates CTR and Recency
+            candidates_ctr = np.array(bhv["candidates_ctr"])
+            candidates, candidates_ctr, candidates_rec = zip(*candidates_ctr)
+            # convert to np array
+            candidates = np.array(candidates)
+            candidates_ctr = np.array(candidates_ctr)
+            candidates_rec = np.array(candidates_rec)
+        else:
+            history = np.array(bhv["history"])[: self.max_history_len]
+            candidates = np.array(bhv["candidates"])
 
         if history.size == 1 and history[0] == '':
             history = self._initialize_cold_start()
@@ -254,41 +206,10 @@ class RecommendationDatasetTest(MINDDataFrame):
         if self.include_ctr:
             return user, history, candidates, labels, time, history_ctr, candidates_ctr, candidates_rec
 
-        return user, history, candidates, labels, time
+        return user, history, candidates, labels
 
     def __len__(self) -> int:
         return len(self.behaviors)
-
-    def _get_ctr(self, news_ids_list: list, times: np.array) -> torch.Tensor:
-        """
-        Receives a list of time objects and news articles ids and return the CTR of this
-        news article for that specific time. 
-        """
-        # Convert tensors to lists for querying
-        times_list = times.tolist()
-
-        # Prepare an empty list to collect num_clicks_acc
-        num_clicks_acc_list = []
-
-        # Load query dataframe
-        pkl_file_path = './data/news_metrics_bucket.pkl'
-        df = pd.read_pickle(pkl_file_path)
-        # Ensure the 'time' column is in datetime format
-
-        # Iterate through each news_id and corresponding time
-        for news_lst, time in zip(news_ids_list, times_list):
-            for news_id in news_lst:
-                try:
-                    # Query the DataFrame for num_clicks_acc
-                    num_clicks_acc = df.loc[(time, news_id), 'num_clicks_acc']
-                    num_clicks_acc_list.append(num_clicks_acc)
-                except KeyError:
-                    # Handle cases where the (time, news_id) pair is not found
-                    # or use NaN, or any appropriate value
-                    num_clicks_acc_list.append(0)
-
-        # Convert the list of num_clicks_acc values back to a torch.Tensor
-        return torch.tensor(num_clicks_acc_list, dtype=torch.float32)
 
     def _initialize_cold_start(self):
         """
@@ -349,13 +270,14 @@ class DatasetCollate:
     def __call__(self, batch) -> RecommendationBatch:
         if self.include_ctr:
             # Under this condition histories and candidates includes CTR information
-            users, histories, candidates, labels,  times, histories_ctr, candidates_ctr, candidates_rec = zip(*batch)
+            users, histories, candidates, labels, times, histories_ctr, candidates_ctr, candidates_rec = zip(*batch)
 
-            histories_ctr = torch.from_numpy(np.concatenate(histories_ctr)).long()
-            candidates_ctr = torch.from_numpy(np.concatenate(candidates_ctr)).long()
-            candidates_rec = torch.from_numpy(np.concatenate(candidates_rec)).long()
+            histories_ctr = torch.from_numpy(np.concatenate(histories_ctr).astype(np.int64)).long()
+            candidates_ctr = torch.from_numpy(np.concatenate(candidates_ctr).astype(np.int64)).long()
+            candidates_rec = torch.from_numpy(np.concatenate(candidates_rec).astype(np.float32)).long()
+            times = self._get_timestamp(times)
         else:
-            users, histories, candidates, labels,  times = zip(*batch)
+            users, histories, candidates, labels = zip(*batch)
 
         batch_hist = self._make_batch_asignees(histories)
         batch_cand = self._make_batch_asignees(candidates)
@@ -364,7 +286,6 @@ class DatasetCollate:
         x_cand = self._tokenize_df(pd.concat(candidates))
         labels = torch.from_numpy(np.concatenate(labels)).float()
         users = torch.from_numpy(np.concatenate(users)).long()
-        times = self._get_timestamp(times)
 
         if self.include_ctr:
             return RecommendationBatch(
@@ -510,6 +431,40 @@ class DatasetCollate:
         return batch_out
 
     def _make_batch_asignees(self, items: Sequence[Sequence[Any]]) -> torch.Tensor:
+        """Constructs a batch tensor for assignees based on the sizes of sub-sequences within `items`.
+
+        This method processes a sequence of item sequences, typically representing groups
+        of query results from a news articles dataframe, and creates a batch tensor. Each element
+        in `items` represents a group of articles, and the method generates a tensor where each
+        group index is repeated according to the number of articles in the group. This tensor can
+        be used to assign batch indices to individual articles based on their group.
+
+        Parameters
+        ----------
+        items : Sequence[Sequence[Any]]
+            A sequence of item sequences. Each inner sequence represents a group of articles
+            and is expected to be a sequence of any type (usually article IDs or embeddings).
+
+        Returns
+        -------
+        torch.Tensor
+            A 1D tensor of type torch.int64, where each element is the index of a group in `items`.
+            The index is repeated as many times as there are elements in the corresponding group.
+
+        Examples
+        --------
+        >>> items = [['a1', 'a2', 'a3'], ['b1', 'b2'], ['c1']]
+        >>> batch = _make_batch_assignees(items)
+        >>> print(batch)
+        tensor([0, 0, 0, 1, 1, 2])
+
+        Note
+        ----
+        This method is specifically useful for preparing batches for model training or inference
+        where articles are grouped based on certain criteria (e.g., publication date, topic) and
+        each group needs to be processed together.
+
+        """
         sizes = torch.tensor([len(x) for x in items])
         batch = torch.repeat_interleave(torch.arange(len(items)), sizes)
 

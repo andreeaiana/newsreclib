@@ -432,8 +432,7 @@ class PPRECModule(AbstractRecommneder):
 
 
     def validation_step(self, batch: RecommendationBatch, batch_idx: int):
-        loss, preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(
-            batch)
+        loss, preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)

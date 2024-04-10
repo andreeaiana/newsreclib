@@ -168,19 +168,13 @@ def get_article2clicks_mind(df_behaviors):
     df_behaviors:
             Behaviors dataframe
     """
-    print(df_behaviors.columns)
     article2published = {}
     article2clicks = defaultdict(list)
-    k = 0
     for _, behavior in df_behaviors.iterrows():
-        k+=1
         if isinstance(behavior["time"], str):
             time = datetime.strptime(behavior["time"], "%m/%d/%Y %I:%M:%S %p")
         else:
             time = behavior["time"]
-        if k < 3:
-            print(time)
-            print(type(time))
         for article_id_and_clicked in behavior["impressions"]:
             article_id = article_id_and_clicked[:-2]  # article id ex: N113723
             article_clicked = article_id_and_clicked[

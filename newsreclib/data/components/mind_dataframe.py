@@ -16,7 +16,7 @@ import newsreclib.data.components.data_utils as data_utils
 import newsreclib.data.components.file_utils as file_utils
 import newsreclib.utils as utils 
 from newsreclib import utils
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 tqdm.pandas()
 
@@ -177,6 +177,8 @@ class MINDDataFrame(Dataset):
         self.word_embeddings_fpath = word_embeddings_fpath
 
         self.news, self.behaviors = self.load_data()
+        self.news_metrics_bucket = None
+        self.articles_est_pb_time = None
 
     def __getitem__(self, index) -> Tuple[Any, Any, Any]:
         user_bhv = self.behaviors.iloc[index]
@@ -208,7 +210,7 @@ class MINDDataFrame(Dataset):
             f"Behaviors data size for data split {self.data_split}, validation={self.validation}: {len(behaviors)}"
         )
 
-        if False: # TODO: remove this logic
+        if self.include_ctr:
             behaviors = self._load_behaviors_ctr(behaviors)
 
         return news, behaviors
@@ -230,20 +232,32 @@ class MINDDataFrame(Dataset):
             log.info(
                 f"User behaviors already parsed. Loading from {parsed_bhv_ctr_file}.")
             behaviors = pd.read_table(filepath_or_buffer=parsed_bhv_ctr_file)
+            behaviors = pd.read_table(
+                filepath_or_buffer=parsed_bhv_ctr_file,
+                converters={
+                    "history": lambda x: x.strip("[]").replace("'", "").split(", "),
+                    "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
+                    "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
+                    "history_ctr": lambda x: literal_eval(x),
+                    "candidates_ctr": lambda x: literal_eval(x),
+                }
+            )
         else:
             # Load news metrics bucket file
             news_metrics_bucket_ptb, news_metrics_bucket_acc = self._load_news_metrics_bucket()
 
             log.info("Adding CTR information into behaviors file...")
+            # Get pickle file for estimated publish time
+            article2published = self.get_est_publish_time()
             acc = True
             if acc:
                 # Parse behaviors to add ctr information
                 behaviors = behaviors.progress_apply(
-                    lambda row: self._ctr_per_row(news_metrics_bucket_acc, row), axis=1)
+                    lambda row: self._ctr_per_row(news_metrics_bucket_acc, row, article2published), axis=1)
             else:
                 # Parse behaviors to add ctr information
                 behaviors = behaviors.progress_apply(
-                    lambda row: self._ctr_per_row(news_metrics_bucket_ptb, row), axis=1)
+                    lambda row: self._ctr_per_row(news_metrics_bucket_ptb, row, article2published), axis=1)
 
             # Save behaviors file with ctr information
             file_utils.to_tsv(behaviors, parsed_bhv_ctr_file)
@@ -579,7 +593,7 @@ class MINDDataFrame(Dataset):
                     "history": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
-                },
+                }
             )
         else:
             log.info("User behaviors not parsed. Loading and parsing raw data.")
@@ -590,8 +604,7 @@ class MINDDataFrame(Dataset):
                 filepath_or_buffer=os.path.join(self.dst_dir, "behaviors.tsv"),
                 header=None,
                 names=column_names,
-                usecols=range(len(column_names)),
-                nrows=10
+                usecols=range(len(column_names))
             )
 
             # parse behaviors
@@ -853,13 +866,13 @@ class MINDDataFrame(Dataset):
         news_metrics_bucket['clicks_attained_ptb'] = news_metrics_bucket['clicks_attained_ptb'].fillna(
             0)
 
-        # Save news metrics bucket into csv and pickle
+        # Save news metrics bucket into csv and pickle     
         news_metrics_bucket.to_pickle(path_nmb_pkl)
         log.info("(ptb) News metric bucket file created!")
 
         return news_metrics_bucket
 
-    def _get_nmb_acc(self, bucket_info, path_nmb_pkl):
+    def _get_nmb_acc(self, bucket_info, path_nmb_acc):
         # --- Compute ptb logic first
         # Compute num_clicks and exposures by grouping by 'time_bucket' and 'news_id'
         news_metrics_bucket = bucket_info.groupby(['time_bucket', 'news_id', 'time_bucket_end_hour']).agg(
@@ -919,7 +932,7 @@ class MINDDataFrame(Dataset):
             0)
 
         # Save news metrics bucket into csv and pickle
-        news_metrics_bucket.to_pickle(path_nmb_pkl)
+        news_metrics_bucket.to_pickle(path_nmb_acc)
         log.info("(acc) News metric bucket file created!")
 
         return news_metrics_bucket
@@ -938,12 +951,15 @@ class MINDDataFrame(Dataset):
         1   09/11/2019 00:00 to 01:00   2019-11-09 00:00:19 N16560  0           1               31              0.0                     1.0
         ...
         """
-        path = os.path.join(self.data_dir)
-        path_bucket = os.path.join(path, "mind_news_bucket.tsv")
-        path_nmb_pkl_ptb = os.path.join(
-            path, "mind_news_metrics_bucket_ptb.pkl")
+        path_folder = os.path.join(self.data_dir, "MINDmetrics_bucket")
+        # Ensure the folder exists
+        os.makedirs(path_folder, exist_ok=True)
+
+        path_bucket = os.path.join(path_folder, "mind_news_bucket.tsv")
         path_nmb_pkl_acc = os.path.join(
-            path, "mind_news_metrics_bucket_acc.pkl")
+            path_folder, "mind_news_metrics_bucket_acc.pkl")
+        path_nmb_pkl_ptb = os.path.join(
+            path_folder, "mind_news_metrics_bucket_ptb.pkl") # TODO: add this file as an option to the acc 
 
         path_behaviors_train = os.path.join(
             self.data_dir, "MIND" + self.dataset_size + "_train" + "/behaviors.tsv"
@@ -952,7 +968,7 @@ class MINDDataFrame(Dataset):
             self.data_dir, "MIND" + self.dataset_size + "_dev" + "/behaviors.tsv"
         )
 
-        if not file_utils.check_integrity(path_nmb_pkl_ptb):
+        if not file_utils.check_integrity(path_nmb_pkl_acc):
             log.info("Creating news metric bucket file...")
             # Load train behaviors
             behaviors_train = pd.read_table(
@@ -974,7 +990,7 @@ class MINDDataFrame(Dataset):
 
             # Join the two behaviors
             behaviors = pd.concat([behaviors_train, behaviors_dev])
-            behaviors.clicked_news.fillna(" ", inplace=True)
+            behaviors.clicked_news = behaviors.clicked_news.fillna(" ")
             behaviors.impressions = behaviors.impressions.str.split()
 
             # Let's split impressions column to make it easier
@@ -983,7 +999,8 @@ class MINDDataFrame(Dataset):
 
             # Apply the function and create a new DataFrame
             bucket_info = pd.DataFrame(
-                [info for _, row in behaviors.iterrows() for info in self.extract_bucket_info(row)])
+                [info for _, row in tqdm(behaviors.iterrows(), total=len(behaviors)) for info in self.extract_bucket_info(row)]
+            )
 
             # Save bucket info
             file_utils.to_tsv(bucket_info, path_bucket)
@@ -1003,11 +1020,30 @@ class MINDDataFrame(Dataset):
 
         return news_metrics_bucket_ptb, news_metrics_bucket_acc
 
-    def _get_ctr(self, news_metrics_bucket: pd.DataFrame, news_id: str, time: object, article2published: Optional[object] = None) -> int:
+    def _get_ctr(self, news_metrics_bucket: pd.DataFrame, news_id: str, time: object, is_history: bool = True, article2published: Optional[object] = None) -> int:
         """
         Receives time and news article id and returns the CTR of this
         news article for that specific time. Optimized with indexing.
+
+        NOTE: 1)edgecase:
+            Handles edge case for news article recency when recency equals zero. A recency value of zero
+            indicates that the article was published no more than a second or a minute prior to being
+            clicked by the user. For consistency and to avoid dealing with imprecisely recorded publish
+            times, recency is assumed to be a minimum of 10 minutes in such cases.
         """
+        recency = None
+        if not is_history:
+            if isinstance(time, str):
+                time_bhv = datetime.strptime(time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
+            else:
+                time_bhv = time.replace(tzinfo=timezone.utc)
+            time_pub = article2published[news_id].replace(tzinfo=timezone.utc)
+
+            recency = (time_bhv - time_pub).total_seconds()
+            # 1) edgecase
+            if recency <= 0:
+                recency = timedelta(minutes=10).total_seconds()
+            recency = recency / 3600
 
         try:
             filtered = news_metrics_bucket.loc[news_metrics_bucket["news_id"] == news_id]
@@ -1018,26 +1054,23 @@ class MINDDataFrame(Dataset):
                 filtered['time_bucket_end_hour'] <= time
             ].iloc[0]
 
-            # only candidates column does have recency
-            if article2published:
-                time_obj = datetime.strptime(time, "%Y-%m-%d %H:%M:%S").replace(tzinfo=timezone.utc)
-                time_pub = article2published[news_id].replace(tzinfo=timezone.utc)
+            if is_history:
+                # history column does not have recency only number of clicks acc
+                return news_id, most_recent['num_clicks_acc']
 
-                recency = time_obj - time_pub
-                # Just to guarantee that recency will always be positive
-                if recency.total_seconds() > 0:
-                    return most_recent['num_clicks_acc'], recency
+            # only candidates column have recency
+            return news_id, most_recent['num_clicks_acc'], recency
 
-            # history column does not have recency only number of clicks acc
-            return most_recent['num_clicks_acc']
         except Exception as err:
-            # KeyError if the news_id is not in the index,
-            # IndexError if no rows match the time condition.
+            # KeyError if the news_id is not in the index, IndexError if no rows match the time condition.
             # Return 0 since we have no information about news articles clicks
-            # print(err) # note: only print for debugging it takes a long time with print statement
-            return 0
+            # print(f"**: {err}")
+            if not is_history:
+                return news_id, 0, recency
+            else:
+                return news_id, 0
 
-    def _ctr_per_row(self, news_metrics_bucket: pd.DataFrame, row: any) -> any:
+    def _ctr_per_row(self, news_metrics_bucket: pd.DataFrame, row: any, article2published:any) -> any:
         """
         1) Convert the history columns from the format below
         [N57021, N4747, N9803, N45994, N24346, N46185]
@@ -1051,16 +1084,18 @@ class MINDDataFrame(Dataset):
         [(N57021, 23, time_obj), (N4747, 10, time_obj), (N9803, 5, time_obj), (N45994, 3, time_obj), (N24346, 1, time_obj), (N46185, 11, time_obj)]
         Where the tuple consists of (news_id, ctr, time_obj).
         Where time_obj is the how long this news article has been activate - "recency". 
+
+        Parameters:
+            - is_history: check if the method is for history or for candidate.
         """
-        # Get pickle file for estimated publish time
-        article2published = self.get_est_publish_time()
 
-        # Transform 'history' column
-        row['history_ctr'] = [(nid, self._get_ctr(
-            news_metrics_bucket, nid, row['time'])) for nid in row['history']]
+        # Get ctr per news article in 'history' column
+        row['history_ctr'] = [self._get_ctr(
+            news_metrics_bucket, nid, row['time']) for nid in row['history']]
 
-        # Transform 'candidates' column
-        row['candidates_ctr'] = [(nid, self._get_ctr(
-            news_metrics_bucket, nid, row['time'], article2published)) for nid in row['candidates']]
+        # Get ctr per news article in 'candidates' column
+        row['candidates_ctr'] = [self._get_ctr(
+            news_metrics_bucket, nid, row['time'], is_history=False, article2published=article2published) for nid in row['candidates']
+        ]
 
         return row

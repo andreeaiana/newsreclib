@@ -33,8 +33,6 @@ model:
   text_embed_dim: 768
   text_num_heads: 16
   query_dim: 200
-  dropout_probability: 0.2
-  pop_embedding_dim: 400
   pretrained_entity_embeddings_path: ${paths.data_dir}MINDsmall_train/transformed_entity_embeddings.npy
 
 callbacks:

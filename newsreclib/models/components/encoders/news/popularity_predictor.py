@@ -46,8 +46,8 @@ class TimeAwareNewsPopularityPredictor(nn.Module):
 
         # Compute news popularity (p_hat) as a weighted sum
         p_hat = theta * p_hat_c + (1 - theta) * p_hat_r
-
+        
         # Final Popularity Score
-        score_popularity = self.w_ctr * ctr.unsqueeze(0) + self.w_p_hat * p_hat.squeeze(-1)
-
-        return score_popularity.squeeze()
+        score_popularity = self.w_ctr * ctr + self.w_p_hat * p_hat.squeeze(-1)
+        
+        return score_popularity

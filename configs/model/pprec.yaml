@@ -19,8 +19,8 @@ plm_model: null
 frozen_layers: null
 query_dim: 200
 dropout_probability: 0.2
-pop_num_embeddings: 200
-pop_embedding_dim: 100
+pop_num_embeddings: 1200 # < 1100 causes an error
+pop_embedding_dim: 400
 hidden_dim_pop_predictor: 100
 rec_num_emb_pop_predictor: 1500
 rec_emb_dim_pop_predictor: 100
