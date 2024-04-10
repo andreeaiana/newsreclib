@@ -32,7 +32,7 @@ setup(
         "tokenizers==0.15.2",
         "torchmetrics==1.3.1",
         "tqdm==4.65.0",
-        "transformers==4.38.2",
+        "transformers==4.38.0",
         "wandb==0.15.3",
         "hydra-colorlog==1.2.0",
         "hydra-optuna-sweeper==1.2.0",
