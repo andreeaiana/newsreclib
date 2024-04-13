@@ -882,10 +882,6 @@ class MINDDataFrame(Dataset):
         news_metrics_bucket = pd.merge(
             news_metrics_bucket, total_impressions_ptb, on='time_bucket')
 
-        # Merge this information back with the original DataFrame
-        news_metrics_bucket = pd.merge(
-            news_metrics_bucket, total_clicks_ptb, on='time_bucket')
-
         # Save news metrics bucket into csv and pickle     
         news_metrics_bucket.to_pickle(path_nmb_pkl)
         log.info("(ptb) News metric bucket file created!")
