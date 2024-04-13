@@ -172,7 +172,7 @@ def get_article2clicks(behaviors_path_train: str, behaviors_path_dev: str):
 
     # ---- Join all news behaviors
     total_behaviors = pd.concat([df_behaviors_train, df_behaviors_val])
-    total_behaviors.history.fillna(" ", inplace=True)
+    total_behaviors['history'] = total_behaviors['history'].fillna(" ")
     total_behaviors.impressions = total_behaviors.impressions.str.split()
 
     article2published = {}

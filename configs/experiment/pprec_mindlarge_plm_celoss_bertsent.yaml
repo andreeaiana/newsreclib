@@ -13,12 +13,12 @@ defaults:
 # all parameters below will be merged with parameters from default configurations set above
 # this allows you to overwrite only specified parameters
 
-tags: ["pprec", "mindsmall", "plm", "celoss", "bertsent"]
+tags: ["pprec", "mindlarge", "plm", "celoss", "bertsent"]
 
 seed: 42
 
 data:
-  dataset_size: "small"
+  dataset_size: "large"
   use_plm: True
   tokenizer_name: roberta-base
   tokenizer_use_fast: True
@@ -34,7 +34,7 @@ model:
   text_embed_dim: 768
   text_num_heads: 16
   query_dim: 200
-  pretrained_entity_embeddings_path: ${paths.data_dir}MINDsmall_train/transformed_entity_embeddings.npy
+  pretrained_entity_embeddings_path: ${paths.data_dir}MINDlarge_train/transformed_entity_embeddings.npy
 
 callbacks:
   early_stopping:
@@ -45,6 +45,6 @@ trainer:
 
 logger:
   wandb:
-    name: "pprec_mindsmall_plm_celoss_bertsent_s42"
+    name: "pprec_mindlarge_plm_celoss_bertsent_s42"
     tags: ${tags}
     group: "mind"
