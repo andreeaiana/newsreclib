@@ -921,10 +921,6 @@ class MINDDataFrame(Dataset):
         # Remove temporary per-time-bucket (ptb) metrics
         news_metrics_bucket = news_metrics_bucket.drop(['num_clicks_ptb', 'exposures_ptb', 'total_impressions_ptb'], axis=1)
 
-        # Merge this information back with the original DataFrame
-        news_metrics_bucket = pd.merge(
-            news_metrics_bucket, total_clicks_acc, on='time_bucket')
-
         # Save news metrics bucket into csv and pickle
         news_metrics_bucket.to_pickle(path_nmb_acc)
         log.info("(acc) News metric bucket file created!")
