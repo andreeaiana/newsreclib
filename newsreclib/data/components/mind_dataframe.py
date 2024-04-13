@@ -178,7 +178,7 @@ class MINDDataFrame(Dataset):
 
         self.news, self.behaviors = self.load_data()
         self.news_metrics_bucket = None
-        self.articles_est_pb_time = None
+        self.articles_est_pbt_time = None
 
     def __getitem__(self, index) -> Tuple[Any, Any, Any]:
         user_bhv = self.behaviors.iloc[index]
@@ -202,6 +202,7 @@ class MINDDataFrame(Dataset):
         Returns:
             Tuple of news and behaviors datasets.
         """
+        log.info(f"Loading data from: {self.dst_dir}")
         news = self._load_news()
         log.info(f"News data size: {len(news)}")
 
@@ -211,11 +212,12 @@ class MINDDataFrame(Dataset):
         )
 
         if self.include_ctr:
-            behaviors = self._load_behaviors_ctr(behaviors)
+            unique_ids_news = news.index.unique().tolist()
+            behaviors = self._load_behaviors_ctr(behaviors, unique_ids_news)
 
         return news, behaviors
 
-    def _load_behaviors_ctr(self, behaviors: pd.DataFrame) -> pd.DataFrame:
+    def _load_behaviors_ctr(self, behaviors: pd.DataFrame, unique_ids: list) -> pd.DataFrame:
         """ Load the parsed behaviors with CTR information.
         If it does not already have the information of CTR load it.
         """
@@ -231,7 +233,6 @@ class MINDDataFrame(Dataset):
             # behaviors already parsed
             log.info(
                 f"User behaviors already parsed. Loading from {parsed_bhv_ctr_file}.")
-            behaviors = pd.read_table(filepath_or_buffer=parsed_bhv_ctr_file)
             behaviors = pd.read_table(
                 filepath_or_buffer=parsed_bhv_ctr_file,
                 converters={
@@ -239,6 +240,8 @@ class MINDDataFrame(Dataset):
                     "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
                     "history_ctr": lambda x: literal_eval(x),
+                    "candidates": lambda x: literal_eval(x),
+                    "cand_num_clicks_acc": lambda x: literal_eval(x),
                     "candidates_ctr": lambda x: literal_eval(x),
                 }
             )
@@ -249,7 +252,7 @@ class MINDDataFrame(Dataset):
             log.info("Adding CTR information into behaviors file...")
             # Get pickle file for estimated publish time
             log.info('Loading news articles publish time...')
-            article2published = self.get_est_publish_time()
+            article2published = self.get_est_publish_time(unique_ids)
             log.info('News articles publish time loaded.')
             acc = True # TODO: add ptb configuration
             if acc:
@@ -264,6 +267,7 @@ class MINDDataFrame(Dataset):
             file_utils.to_tsv(behaviors, parsed_bhv_ctr_file)
             log.info("CTR information added to behaviors file!")
 
+        # Parse candidates_ctr as a list of tuples. NOTE:
         return behaviors
 
     def _load_news(self) -> pd.DataFrame:
@@ -319,7 +323,7 @@ class MINDDataFrame(Dataset):
 
             # add estimated publish time column
             log.info('Loading news articles publish time...')
-            article2published = self.get_est_publish_time(news['nid'].unique())
+            article2published = self.get_est_publish_time(news["nid"].unique().tolist())
             log.info('News articles publish time loaded.')
             news["est_publish_time"] = news["nid"].map(article2published)
 
@@ -745,7 +749,7 @@ class MINDDataFrame(Dataset):
         to provide comprehensive publish time estimates.
 
         The first pickle file is generated using the utility method `get_article2clicks` from the 
-        `utils` module, which outputs 'articles_est_pb_time.pkl'. This file estimates publish times 
+        `utils` module, which outputs 'articles_est_pbt_time.pkl'. This file estimates publish times 
         based on article clicks.
 
         The second file, 'articles_timeDict_103630.pkl', is provided by the research detailed in 
@@ -777,34 +781,37 @@ class MINDDataFrame(Dataset):
         if file_utils.check_integrity(upt_path):
             return pd.read_pickle(upt_path)
         else:
-            est_pb_time = os.path.join(self.data_dir, "articles_est_pb_time.pkl")
+            est_pb_time = os.path.join(self.data_dir, "articles_est_pbt_time.pkl")
             if file_utils.check_integrity(est_pb_time):
-                articles_est_pb = pd.read_pickle(est_pb_time)
+                articles_est_pbt = pd.read_pickle(est_pb_time)
             else:
-                article2published = self.get_est_pbt_click_time()
+                articles_est_pbt = self.get_est_pbt_click_time()
                 # Save DataFrame to a pickle file
-                pbt_path = os.path.join(self.data_dir, "articles_est_pb_time.pkl")
+                pbt_path = os.path.join(self.data_dir, "articles_est_pbt_time.pkl")
                 with open(pbt_path, 'wb') as file:
                     # Save dict as a pickle file
-                    pickle.dump(article2published, file)
-
-                articles_est_pb = article2published
+                    pickle.dump(articles_est_pbt, file)
         
             # -- load the other pickle file
             time_dict_path = os.path.join(self.data_dir, "articles_timeDict_103630.pkl")
             articles_time_dict = pd.read_pickle(time_dict_path)
 
-            # Update articles_est_pb with missing data from articles_time_dict
-            for key, value in articles_time_dict.items():
-                if key not in articles_est_pb:
-                    articles_est_pb[key] = value
+            # Update articles_est_pbt with missing data from articles_time_dict
+            # Check if there is any news article missing, in case there is the value assigned will be earliest from article2published
+            earliest_date = min(articles_est_pbt.values())
+            for key in unique_ids:
+                if key not in articles_est_pbt:
+                    if key in articles_time_dict:
+                        articles_est_pbt[key] = articles_time_dict[key]
+                    else:
+                        articles_est_pbt[key] = earliest_date
                 
             # -- Save the updated dictionary to a new pickle file
             with open(upt_path, 'wb') as handle:
                 log.info('news articles publish time saved.')
-                pickle.dump(articles_est_pb, handle, protocol=pickle.HIGHEST_PROTOCOL)
+                pickle.dump(articles_est_pbt, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-            return articles_est_pb
+            return articles_est_pbt
 
     def get_est_pbt_click_time(self):
         """
@@ -1049,7 +1056,10 @@ class MINDDataFrame(Dataset):
             on=['history_news_id', 'impid', 'user', 'time'],
             how='left'
         )
+
         final_df['num_clicks_acc'] = final_df['num_clicks_acc'].fillna(0)
+        final_df['num_clicks_acc'] = final_df['num_clicks_acc'].astype(int)
+
         result_df = final_df.groupby(['impid', 'user', 'time']).agg({
             'history_news_id': list,
             'num_clicks_acc': self.aux_lst_f
@@ -1078,8 +1088,6 @@ class MINDDataFrame(Dataset):
 
 
     def _get_candidate_ctr(self, behaviors: pd.DataFrame, news_metrics_bucket: pd.DataFrame, article2published: any) -> any:
-        # Map publishing times
-
         # Explode the 'candidates' column to individual rows for easier processing
         bhv_cand_explode = behaviors.explode('candidates')
         bhv_cand_explode = bhv_cand_explode.rename(columns={'candidates': 'cand_news_id'})
@@ -1119,22 +1127,30 @@ class MINDDataFrame(Dataset):
             how='left'
         )
         final_df['num_clicks_acc'] = final_df['num_clicks_acc'].fillna(0)
+        final_df['num_clicks_acc'] = final_df['num_clicks_acc'].astype(int)
+
+        # Get recency column
+        final_df['time'] = pd.to_datetime(final_df['time'])
+        final_df['cand_recency'] = (final_df['time'] - final_df['pb_time']).dt.total_seconds() / 3600
+        final_df['cand_recency'] = final_df['cand_recency'].astype(int)
+
+        # check if there's any negative value on the recency column
+        assert False == (final_df['cand_recency'] < 0).any()
 
         result_df = final_df.groupby(['impid', 'user', 'time']).agg({
             'cand_news_id': list,
             'num_clicks_acc': self.aux_lst_f,
-            'pb_time': self.aux_lst_f,
+            'cand_recency': self.aux_lst_f,
         }).reset_index()
-        result_df['candidates_ctr'] = result_df.apply(lambda x: list(zip(x['cand_news_id'], x['num_clicks_acc'], x['pb_time'])), axis=1)
+
         result_df = result_df.rename(columns={'cand_news_id': 'candidates'})
-        result_df = result_df.rename(columns={'pb_time': 'cand_pb_time'})
         result_df = result_df.rename(columns={'num_clicks_acc': 'cand_num_clicks_acc'})
 
-        # Parse to datetime format
-        behaviors['time'] = pd.to_datetime(behaviors['time'])
-        result_df['time'] = pd.to_datetime(result_df['time'])
+        # compute candidates_ctr
+        result_df['candidates_ctr'] = result_df.apply(lambda x: list(zip(x['candidates'], x['cand_num_clicks_acc'], x['cand_recency'])), axis=1)
 
         # Validate that merged data matches original behaviors data
+        behaviors['time'] = pd.to_datetime(behaviors['time'])
         behaviors_ = pd.merge(behaviors, result_df, on=['impid', 'user', 'time'], how='inner')
         diff_mask = behaviors_['candidates_x'] != behaviors_['candidates_y']
         different_indexes = behaviors_.index[diff_mask].tolist()
@@ -1195,7 +1211,7 @@ class MINDDataFrame(Dataset):
         )
         behaviors = pd.merge(
             behaviors, 
-            df_candidate_ctr[['impid', 'candidates_ctr', 'cand_num_clicks_acc']], 
+            df_candidate_ctr[['impid', 'cand_num_clicks_acc', 'cand_recency', 'candidates_ctr']], 
             on='impid', 
             how='left'
         )
