@@ -63,14 +63,11 @@ class RecommendationDatasetTrain(MINDDataFrame):
             # -- Get candidates CTR and Recency
             candidates_ctr = np.array(bhv["candidates_ctr"])
             candidates, candidates_ctr, candidates_rec = zip(*candidates_ctr)
-            candidates_0 = candidates
+
             # convert to np array
             candidates = np.array(candidates)
-            candidates_1 = candidates
-            labels_1 = labels
             candidates, labels, indices = self._sample_candidates(candidates, labels)
-            candidates_2 = candidates
-            labels_2 = labels
+
             candidates_ctr = np.array(candidates_ctr)[indices]
             candidates_rec = np.array(candidates_rec)[indices]
 
