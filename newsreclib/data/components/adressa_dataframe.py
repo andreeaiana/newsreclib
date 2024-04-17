@@ -548,7 +548,7 @@ class AdressaDataFrame(Dataset):
             log.info("Mapping uid to index.")
             behaviors["user"] = behaviors["uid"].apply(lambda x: uid2index.get(x, 0))
 
-            behaviors = behaviors[["user", "history", "candidates", "labels"]]
+            behaviors = behaviors[["uid", "user", "history", "candidates", "labels"]]
 
             # cache processed data
             log.info(
@@ -560,7 +560,7 @@ class AdressaDataFrame(Dataset):
 
     def _process_news_files(
         self, filepath
-    ) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, int]]:
+    ) -> Tuple[Dict[str, str], Dict[str, str], Dict[str, str], Dict[str, str]]:
         """Processes the news data.
 
         Adapted from
@@ -604,7 +604,9 @@ class AdressaDataFrame(Dataset):
                                 == event_dict["category1"].split("|")[-1]
                             )
 
-        nid2index = {k: v for k, v in zip(news_title.keys(), range(1, len(news_title) + 1))}
+        nid2index = {
+            k: "N" + str(v) for k, v in zip(news_title.keys(), range(1, len(news_title) + 1))
+        }
 
         return news_title, news_category, news_subcategory, nid2index
 
@@ -664,7 +666,7 @@ class AdressaDataFrame(Dataset):
                         and event_dict["id"] in nid2index
                     ):
                         nindex = nid2index[event_dict["id"]]
-                        uid = event_dict["userId"]
+                        uid = "U" + str(event_dict["userId"])
 
                         if uid not in uid2index:
                             uid2index[uid] = len(uid2index)

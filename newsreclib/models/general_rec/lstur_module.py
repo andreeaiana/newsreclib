@@ -77,6 +77,10 @@ class LSTURModule(AbstractRecommneder):
             The number of topical categories.
         num_sent_classes:
             The number of sentiment classes.
+        save_recs:
+            Whether to save the recommendations (i.e., candidates news and corresponding scores) to disk in JSON format.
+        recs_fpath:
+            Path where to save the list of recommendations and corresponding scores for users.
         optimizer:
             Optimizer used for model training.
         scheduler:
@@ -110,6 +114,8 @@ class LSTURModule(AbstractRecommneder):
         top_k_list: List[int],
         num_categ_classes: int,
         num_sent_classes: int,
+        save_recs: bool,
+        recs_fpath: Optional[str],
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
     ) -> None:
@@ -122,6 +128,9 @@ class LSTURModule(AbstractRecommneder):
         self.num_categ_classes = self.hparams.num_categ_classes + 1
         self.num_sent_classes = self.hparams.num_sent_classes + 1
         self.num_users = self.hparams.num_users + 1
+
+        if self.hparams.save_recs:
+            assert isinstance(self.hparams.recs_fpath, str)
 
         # initialize loss
         if not self.hparams.dual_loss_training:
@@ -281,7 +290,7 @@ class LSTURModule(AbstractRecommneder):
         )
         if not self.hparams.late_fusion:
             # encode user
-            user_vector = self.user_encoder(batch["users"], hist_news_vector_agg, hist_size)
+            user_vector = self.user_encoder(batch["user_idx"], hist_news_vector_agg, hist_size)
         else:
             # aggregate embeddings of clicked news
             user_vector = torch.div(hist_news_vector_agg.sum(dim=1), hist_size.unsqueeze(dim=-1))
@@ -299,6 +308,8 @@ class LSTURModule(AbstractRecommneder):
     def model_step(
         self, batch: RecommendationBatch
     ) -> Tuple[
+        torch.Tensor,
+        torch.Tensor,
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
@@ -381,6 +392,9 @@ class LSTURModule(AbstractRecommneder):
             [torch.where(mask_hist[n])[0].shape[0] for n in range(mask_hist.shape[0])]
         )
 
+        user_ids = batch["user_ids"]
+        cand_news_ids = batch["x_cand"]["news_ids"]
+
         return (
             loss,
             preds,
@@ -391,10 +405,12 @@ class LSTURModule(AbstractRecommneder):
             target_sentiments,
             hist_categories,
             hist_sentiments,
+            user_ids,
+            cand_news_ids,
         )
 
     def training_step(self, batch: RecommendationBatch, batch_idx: int):
-        loss, preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(batch)
+        loss, preds, targets, cand_news_size, _, _, _, _, _, _, _ = self.model_step(batch)
 
         # update and log loss
         self.train_loss(loss)
@@ -428,7 +444,7 @@ class LSTURModule(AbstractRecommneder):
         self.training_step_outputs = self._clear_epoch_outputs(self.training_step_outputs)
 
     def validation_step(self, batch: RecommendationBatch, batch_idx: int):
-        loss, preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(batch)
+        loss, preds, targets, cand_news_size, _, _, _, _, _, _, _ = self.model_step(batch)
 
         # update and log metrics
         self.val_loss(loss)
@@ -482,6 +498,8 @@ class LSTURModule(AbstractRecommneder):
             target_sentiments,
             hist_categories,
             hist_sentiments,
+            user_ids,
+            cand_news_ids,
         ) = self.model_step(batch)
 
         # update and log metrics
@@ -517,6 +535,9 @@ class LSTURModule(AbstractRecommneder):
         cand_indexes = torch.arange(cand_news_size.shape[0]).repeat_interleave(cand_news_size)
         hist_indexes = torch.arange(hist_news_size.shape[0]).repeat_interleave(hist_news_size)
 
+        user_ids = self._gather_step_outputs(self.test_step_outputs, "user_ids")
+        cand_news_ids = self._gather_step_outputs(self.test_step_outputs, "cand_news_ids")
+
         # update metrics
         self.test_rec_metrics(preds, targets, **{"indexes": cand_indexes})
         self.test_categ_div_metrics(preds, target_categories, cand_indexes)
@@ -544,6 +565,19 @@ class LSTURModule(AbstractRecommneder):
         self.log_dict(
             self.test_sent_pers_metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True
         )
+
+        # save recommendations
+        if self.hparams.save_recs:
+            recommendations_dico = self._get_recommendations(
+                user_ids=user_ids,
+                news_ids=cand_news_ids,
+                scores=preds,
+                cand_news_size=cand_news_size,
+            )
+            print(recommendations_dico)
+            self._save_recommendations(
+                recommendations=recommendations_dico, fpath=self.hparams.recs_fpath
+            )
 
         # clear memory for the next epoch
         self.test_step_outputs = self._clear_epoch_outputs(self.test_step_outputs)

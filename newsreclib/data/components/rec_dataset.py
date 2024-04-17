@@ -46,6 +46,9 @@ class RecommendationDatasetTrain(MINDDataFrame):
         bhv = self.behaviors.iloc[index]
 
         user = np.array([int(bhv["user"])])
+        user_id = np.array([int(bhv["uid"].split("U")[-1])])
+        user_idx = np.array([int(bhv["user"])])
+
         labels = np.array(bhv["labels"])
         if isinstance(bhv["time"], str):
             time = datetime.strptime(bhv["time"], "%Y-%m-%d %H:%M:%S")
@@ -83,8 +86,8 @@ class RecommendationDatasetTrain(MINDDataFrame):
         candidates = self.news.loc[candidates]
 
         if self.include_ctr:
-            return user, history, candidates, labels, time, history_ctr, candidates_ctr, candidates_rec
-        return user, history, candidates, labels
+            return user_id, user_idx, history, candidates, labels, time, history_ctr, candidates_ctr, candidates_rec
+        return user_id, user_idx, history, candidates, labels
 
 
     def __len__(self) -> int:
@@ -168,7 +171,9 @@ class RecommendationDatasetTest(MINDDataFrame):
     def __getitem__(self, idx: Any) -> Tuple[np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         bhv = self.behaviors.iloc[idx]
 
-        user = np.array([int(bhv["user"])])
+        user_id = np.array([int(bhv["uid"].split("U")[-1])])
+        user_idx = np.array([int(bhv["user"])])
+
         labels = np.array(bhv["labels"])
         if isinstance(bhv["time"], str):
             time = datetime.strptime(bhv["time"], "%Y-%m-%d %H:%M:%S")
@@ -200,10 +205,10 @@ class RecommendationDatasetTest(MINDDataFrame):
             history = self.news.loc[history]
         candidates = self.news.loc[candidates]
 
-        if self.include_ctr:
-            return user, history, candidates, labels, time, history_ctr, candidates_ctr, candidates_rec
 
-        return user, history, candidates, labels
+        if self.include_ctr:
+            return user_id, user_idx, history, candidates, labels, time, history_ctr, candidates_ctr, candidates_rec
+        return user_id, user_idx, history, candidates, labels
 
     def __len__(self) -> int:
         return len(self.behaviors)
@@ -267,14 +272,14 @@ class DatasetCollate:
     def __call__(self, batch) -> RecommendationBatch:
         if self.include_ctr:
             # Under this condition histories and candidates includes CTR information
-            users, histories, candidates, labels, times, histories_ctr, candidates_ctr, candidates_rec = zip(*batch)
+            user_ids, user_idx, histories, candidates, labels, times, histories_ctr, candidates_ctr, candidates_rec = zip(*batch)
 
             histories_ctr = torch.from_numpy(np.concatenate(histories_ctr).astype(np.int64)).long()
             candidates_ctr = torch.from_numpy(np.concatenate(candidates_ctr).astype(np.int64)).long()
             candidates_rec = torch.from_numpy(np.concatenate(candidates_rec).astype(np.float32)).long()
             times = self._get_timestamp(times)
         else:
-            users, histories, candidates, labels = zip(*batch)
+            user_ids, user_idx, histories, candidates, labels = zip(*batch)
 
         batch_hist = self._make_batch_asignees(histories)
         batch_cand = self._make_batch_asignees(candidates)
@@ -282,7 +287,8 @@ class DatasetCollate:
         x_hist = self._tokenize_df(pd.concat(histories))
         x_cand = self._tokenize_df(pd.concat(candidates))
         labels = torch.from_numpy(np.concatenate(labels)).float()
-        users = torch.from_numpy(np.concatenate(users)).long()
+        user_ids = torch.from_numpy(np.concatenate(user_ids)).long()
+        user_idx = torch.from_numpy(np.concatenate(user_idx)).long()
 
         if self.include_ctr:
             return RecommendationBatch(
@@ -291,7 +297,8 @@ class DatasetCollate:
                 x_hist=x_hist,
                 x_cand=x_cand,
                 labels=labels,
-                users=users,
+                user_ids=user_ids,
+                user_idx=user_idx,
                 times=times,
                 x_hist_ctr=histories_ctr,
                 x_cand_ctr=candidates_ctr,
@@ -304,7 +311,8 @@ class DatasetCollate:
                 x_hist=x_hist,
                 x_cand=x_cand,
                 labels=labels,
-                users=users,
+                user_ids=user_ids,
+                user_idx=user_idx,
             )
 
     def _tokenize_embeddings(self, text: List[List[int]], max_len: Optional[int]) -> torch.Tensor:
@@ -324,6 +332,10 @@ class DatasetCollate:
 
     def _tokenize_df(self, df: pd.DataFrame) -> Dict[str, Any]:
         batch_out = {}
+
+        # news IDs (i.e., keep only numeric part of unique NID)
+        nids = np.array([int(nid.split("N")[-1]) for nid in df.index.values])
+        batch_out["news_ids"] = torch.from_numpy(nids).long()
 
         if not self.concatenate_inputs:
             # prepare text

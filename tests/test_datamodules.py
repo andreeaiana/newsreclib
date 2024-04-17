@@ -116,7 +116,7 @@ def test_mind_rec_small_datamodule(batch_size):
 
     batch = next(iter(dm.train_dataloader()))
 
-    assert len(batch["users"]) == batch_size
+    assert len(batch["user_idx"]) == batch_size
 
 
 @pytest.mark.parametrize("batch_size", [8, 64])
@@ -223,4 +223,4 @@ def test_adressa_rec_small_datamodule(batch_size):
 
     batch = next(iter(dm.train_dataloader()))
 
-    assert len(batch["users"]) == batch_size
+    assert len(batch["user_idx"]) == batch_size

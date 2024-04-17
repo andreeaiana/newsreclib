@@ -17,8 +17,10 @@ class RecommendationBatch(TypedDict):
             Dictionary of news from a the users' candidates, mapping news features to values.
         labels:
             Ground truth specifying whether the news is relevant to the user.
-        users:
-            Users included in the batch.
+        user_ids:
+            Original user IDs of the users included in the batch.
+        user_idx:
+            Indices of users included in the batch (e.g., for creating embedding matrix).
         times: Optional
             Times for each impression
         x_hist_ctr: Optional
@@ -34,7 +36,8 @@ class RecommendationBatch(TypedDict):
     x_hist: Dict[str, Any]
     x_cand: Dict[str, Any]
     labels: torch.Tensor
-    users: torch.Tensor
+    user_ids: torch.Tensor
+    user_idx: torch.Tensor
     times: torch.Tensor
     x_hist_ctr: torch.Tensor
     x_cand_ctr: torch.Tensor
