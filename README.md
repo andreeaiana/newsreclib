@@ -136,6 +136,18 @@ Alternatively, configurations can be overridden from the command line, as follow
     python newsreclib/train.py experiment=nrms_mindsmall_plm_supconloss_bertsent data.batch_size=128
 ```
 
+## On some models specifics
+
+### MIND
+Some models may require the publish time of news articles. Considering this, it's crucial to create a dictionary that associates news article IDs with their respective publication times for the MIND dataset. Therefore, please follow these instructions to download the required file:
+
+```
+chmod +x mind_pbt_download.sh
+./mind_pbt_download.sh
+```
+
+NOTE: The file `articles_timeDict_103630.pkl` will be utilized to generate the final version of the file named `updated_articles_publish_time.pkl`. This final version will be created using the method `get_article2clicks`.
+
 ## Features
 
 - **Training**
