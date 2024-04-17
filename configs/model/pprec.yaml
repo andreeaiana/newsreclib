@@ -3,7 +3,7 @@ _target_: newsreclib.models.fair_rec.pprec_module.PPRECModule
 # training strategy
 dual_loss_training: False
 dual_loss_coef: null
-loss: "cross_entropy_loss"
+loss: "BPR_pairwise_loss"
 temperature: None
 
 # news encoder

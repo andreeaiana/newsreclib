@@ -269,7 +269,8 @@ class PPRECModule(AbstractRecommneder):
         eta = self.sigmoid(self.gate_eta(user_vector))
 
         # compute popularity score (sp)
-        sp = self.time_aware_popularity_encoder(cand_news_vector_agg, x_cand_rec_vec, x_cand_ctr_vec)
+        sp = self.time_aware_popularity_encoder(
+            cand_news_vector_agg, x_cand_rec_vec, x_cand_ctr_vec)
 
         # compute personalized matching score (sm)
         sm = self.personalized_mat_score(
@@ -296,6 +297,8 @@ class PPRECModule(AbstractRecommneder):
         torch.Tensor,
         torch.Tensor,
         torch.Tensor,
+        torch.Tensor,
+        torch.Tensor,
     ]:
         scores = self.forward(batch)
 
@@ -313,7 +316,7 @@ class PPRECModule(AbstractRecommneder):
             batch["x_hist"]["sentiment"], batch["batch_hist"])
 
         # loss computation
-        if self.hparams.loss == "cross_entropy_loss":
+        if self.hparams.loss == "cross_entropy_loss" or self.hparams.loss == "BPR_pairwise_loss":
             loss = self.criterion(scores, y_true)
         else:
             # indices of positive pairs for loss calculation
@@ -383,6 +386,9 @@ class PPRECModule(AbstractRecommneder):
              for n in range(mask_hist.shape[0])]
         )
 
+        user_ids = batch["user_ids"]
+        cand_news_ids = batch["x_cand"]["news_ids"]
+
         return (
             loss,
             preds,
@@ -393,10 +399,12 @@ class PPRECModule(AbstractRecommneder):
             target_sentiments,
             hist_categories,
             hist_sentiments,
+            user_ids,
+            cand_news_ids,
         )
 
     def training_step(self, batch: RecommendationBatch, batch_idx: int):
-        loss, preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(
+        loss, preds, targets, cand_news_size, _, _, _, _, _, _, _ = self.model_step(
             batch)
 
         # update and log loss
@@ -415,9 +423,12 @@ class PPRECModule(AbstractRecommneder):
     def on_train_epoch_end(self) -> None:
         # update and log metrics
         preds = self._gather_step_outputs(self.training_step_outputs, "preds")
-        targets = self._gather_step_outputs(self.training_step_outputs, "targets")
-        cand_news_size = self._gather_step_outputs(self.training_step_outputs, "cand_news_size")
-        indexes = torch.arange(cand_news_size.shape[0]).repeat_interleave(cand_news_size)
+        targets = self._gather_step_outputs(
+            self.training_step_outputs, "targets")
+        cand_news_size = self._gather_step_outputs(
+            self.training_step_outputs, "cand_news_size")
+        indexes = torch.arange(
+            cand_news_size.shape[0]).repeat_interleave(cand_news_size)
 
         # update metrics
         self.train_rec_metrics(preds, targets, **{"indexes": indexes})
@@ -428,11 +439,12 @@ class PPRECModule(AbstractRecommneder):
         )
 
         # clear memory for the next epoch
-        self.training_step_outputs = self._clear_epoch_outputs(self.training_step_outputs)
-
+        self.training_step_outputs = self._clear_epoch_outputs(
+            self.training_step_outputs)
 
     def validation_step(self, batch: RecommendationBatch, batch_idx: int):
-        loss, preds, targets, cand_news_size, _, _, _, _, _ = self.model_step(batch)
+        loss, preds, targets, cand_news_size, _, _, _, _, _, _, _ = self.model_step(
+            batch)
 
         # update and log metrics
         self.val_loss(loss)
@@ -489,6 +501,8 @@ class PPRECModule(AbstractRecommneder):
             target_sentiments,
             hist_categories,
             hist_sentiments,
+            user_ids,
+            cand_news_ids,
         ) = self.model_step(batch)
 
         # update and log metrics
@@ -532,6 +546,11 @@ class PPRECModule(AbstractRecommneder):
         hist_indexes = torch.arange(
             hist_news_size.shape[0]).repeat_interleave(hist_news_size)
 
+        user_ids = self._gather_step_outputs(
+            self.test_step_outputs, "user_ids")
+        cand_news_ids = self._gather_step_outputs(
+            self.test_step_outputs, "cand_news_ids")
+
         # update metrics
         self.test_rec_metrics(preds, targets, **{"indexes": cand_indexes})
         self.test_categ_div_metrics(preds, target_categories, cand_indexes)
@@ -559,6 +578,19 @@ class PPRECModule(AbstractRecommneder):
         self.log_dict(
             self.test_sent_pers_metrics, on_step=False, on_epoch=True, prog_bar=True, logger=True
         )
+
+        # save recommendations
+        if self.hparams.save_recs:
+            recommendations_dico = self._get_recommendations(
+                user_ids=user_ids,
+                news_ids=cand_news_ids,
+                scores=preds,
+                cand_news_size=cand_news_size,
+            )
+            print(recommendations_dico)
+            self._save_recommendations(
+                recommendations=recommendations_dico, fpath=self.hparams.recs_fpath
+            )
 
         # clear memory for the next epoch
         self.test_step_outputs = self._clear_epoch_outputs(

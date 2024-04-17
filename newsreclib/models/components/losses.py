@@ -1,3 +1,5 @@
+import torch
+import torch.nn as nn
 from pytorch_metric_learning import losses
 from pytorch_metric_learning.utils import common_functions as c_f
 from pytorch_metric_learning.utils import loss_and_miner_utils as lmu
@@ -38,3 +40,23 @@ class SupConLoss(losses.SupConLoss):
                 }
             }
         return self.zero_losses()
+
+
+class BPRPairwiseRankingLoss(nn.Module):
+    def __init__(self):
+        super(BPRPairwiseRankingLoss, self).__init__()
+
+    def forward(self, labels, ref_labels):
+        # Calculate the ranking difference between the positve and negative sample respectively
+        pred_diff = ref_labels - labels
+
+        # Apply the sigmoid function
+        sigmoid_pred_diff = torch.sigmoid(pred_diff)
+
+        # Compute the logarithm of the sigmoid results
+        log_probs = torch.log(sigmoid_pred_diff)
+
+        # Mean the log probabilities to compute the loss
+        loss = - torch.mean(log_probs)
+
+        return loss
