@@ -23,9 +23,9 @@ data:
   tokenizer_name: roberta-base
   tokenizer_use_fast: True
   tokenizer_max_len: 96
-  batch_size: 16
+  batch_size: 8
   include_ctr: True
-  num_workers: 63
+  num_workers: 18
 
 model:
   use_plm: True

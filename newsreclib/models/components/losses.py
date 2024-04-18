@@ -42,50 +42,47 @@ class SupConLoss(losses.SupConLoss):
 
 
 class BPRLoss(losses.BaseMetricLossFunction):
-    """ Bayesian Personalized Ranking Loss
+    """Bayesian Personalized Ranking Loss
 
     References:
     - https://d2l.ai/chapter_recommender-systems/ranking.html
     """
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
 
-    def compute_loss(self, scores, labels, indices_tuple, ref_emb, ref_labels):
+    def compute_loss(self, embeddings, labels, indices_tuple, ref_emb, ref_labels):
         # Unpack indices_tuple which is expected to contain (q_p, p, q_n, n)
+        scores = embeddings
         q_p, p, q_n, n = indices_tuple
 
-        print("------ embeddings ------")
-        print(scores.size())
-        print("------ q_p ------")
-        print(q_p.size())
-        print("------ p ------")
-        print(p.size())
-        print("------ q_n ------")
-        print(q_n.size())
-        print("------ n ------")
-        print(n.size())
-        print("-----------")
-
-        # Extract scores for positive and negative samples using provided indices
+        # Gathering positive scores
         pos_scores = scores[q_p, p]
-        neg_scores = scores[q_n, n]
 
-        print("------ pos_scores ------")
-        print(pos_scores.size())
-        print(pos_scores.unsqueeze(1).size())
-        print("------ neg_scores ------")
-        print(neg_scores.size())
-        print(neg_scores.unsqueeze(0).size())
-        print("-----------")
+        #  Initialize an empty tensor for collecting individual user losses
+        user_losses = torch.tensor([], device=scores.device, dtype=scores.dtype)
 
-        # Compute the score differences
-        score_diffs = pos_scores.unsqueeze(1) - neg_scores.unsqueeze(0)
+        # Loop over each positive score index
+        for idx, pos_idx in enumerate(q_p):
+            # Find indices where the negative scores match the current positive score's user index
+            relevant_neg_idx = q_n == pos_idx
 
-        # Apply the sigmoid function to the score differences
-        sigmoid_scores = torch.sigmoid(score_diffs)
+            # Gather negative scores for the current user using the filtered indices
+            neg_scores_for_user = scores[pos_idx, n[relevant_neg_idx]]
 
-        # Compute the log likelihood of the sigmoid scores
-        losses = -torch.log(sigmoid_scores + c_f.small_val(scores.dtype))  # Add epsilon for numerical stability
+            # Calculate differences between the current positive score and all corresponding negatives
+            differences = pos_scores[idx] - neg_scores_for_user
+
+            # Apply sigmoid to the differences
+            sigmoid_differences = torch.sigmoid(differences)
+
+            # Calculate the negative log of the sigmoid of differences
+            losses = -torch.log(
+                sigmoid_differences + torch.finfo(scores.dtype).eps
+            )  # Adding a small epsilon for numerical stability
+
+            # Concatenate the current user's losses to the total
+            user_losses = torch.cat((user_losses, losses))
 
         # Calculate the average loss
         mean_loss = torch.mean(losses)
