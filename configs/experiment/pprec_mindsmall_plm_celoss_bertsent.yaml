@@ -23,7 +23,7 @@ data:
   tokenizer_name: roberta-base
   tokenizer_use_fast: True
   tokenizer_max_len: 96
-  batch_size: 8
+  batch_size: 16
   include_ctr: True
   num_workers: 63
 

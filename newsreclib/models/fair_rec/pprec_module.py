@@ -316,7 +316,7 @@ class PPRECModule(AbstractRecommneder):
             batch["x_hist"]["sentiment"], batch["batch_hist"])
 
         # loss computation
-        if self.hparams.loss == "cross_entropy_loss" or self.hparams.loss == "BPR_pairwise_loss":
+        if self.hparams.loss == "cross_entropy_loss":
             loss = self.criterion(scores, y_true)
         else:
             # indices of positive pairs for loss calculation
@@ -364,8 +364,23 @@ class PPRECModule(AbstractRecommneder):
                 ) * ce_loss + self.hparams.dual_loss_coef * scl_loss
 
         # model outputs for metric computation
+        print("********* loss *********")
+        print(loss.size())
+        print(loss)
+        print("********* scores *********")
+        print(scores.size())
+        print(scores)
+        print("********* mask_cand *********")
+        print(mask_cand.size())
+        print(mask_cand)
         preds = self._collect_model_outputs(scores, mask_cand)
+        print("********* preds *********")
+        print(preds.size())
+        print(preds)
         targets = self._collect_model_outputs(y_true, mask_cand)
+        print("********* targets *********")
+        print(targets.size())
+        print(targets)
 
         hist_categories = self._collect_model_outputs(
             clicked_categories, mask_hist)
@@ -479,6 +494,21 @@ class PPRECModule(AbstractRecommneder):
             cand_news_size.shape[0]).repeat_interleave(cand_news_size)
 
         # update metrics
+        print("------- preds --------")
+        print(preds.size())
+        print(preds)
+        print("------- targets --------")
+        print(targets.size())
+        print(targets)
+        print("---------------")
+        print("------- cand_news_size --------")
+        print(cand_news_size.size())
+        print(cand_news_size)
+        print("---------------")
+        print("------- indexes --------")
+        print(indexes.size())
+        print(indexes)
+        print("---------------")
         self.val_rec_metrics(preds, targets, **{"indexes": indexes})
 
         # log metrics

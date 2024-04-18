@@ -1,5 +1,4 @@
 import torch
-import torch.nn as nn
 from pytorch_metric_learning import losses
 from pytorch_metric_learning.utils import common_functions as c_f
 from pytorch_metric_learning.utils import loss_and_miner_utils as lmu
@@ -42,21 +41,59 @@ class SupConLoss(losses.SupConLoss):
         return self.zero_losses()
 
 
-class BPRPairwiseRankingLoss(nn.Module):
-    def __init__(self):
-        super(BPRPairwiseRankingLoss, self).__init__()
+class BPRLoss(losses.BaseMetricLossFunction):
+    """ Bayesian Personalized Ranking Loss
 
-    def forward(self, labels, ref_labels):
-        # Calculate the ranking difference between the positve and negative sample respectively
-        pred_diff = ref_labels - labels
+    References:
+    - https://d2l.ai/chapter_recommender-systems/ranking.html
+    """
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
 
-        # Apply the sigmoid function
-        sigmoid_pred_diff = torch.sigmoid(pred_diff)
+    def compute_loss(self, scores, labels, indices_tuple, ref_emb, ref_labels):
+        # Unpack indices_tuple which is expected to contain (q_p, p, q_n, n)
+        q_p, p, q_n, n = indices_tuple
 
-        # Compute the logarithm of the sigmoid results
-        log_probs = torch.log(sigmoid_pred_diff)
+        print("------ embeddings ------")
+        print(scores.size())
+        print("------ q_p ------")
+        print(q_p.size())
+        print("------ p ------")
+        print(p.size())
+        print("------ q_n ------")
+        print(q_n.size())
+        print("------ n ------")
+        print(n.size())
+        print("-----------")
 
-        # Mean the log probabilities to compute the loss
-        loss = - torch.mean(log_probs)
+        # Extract scores for positive and negative samples using provided indices
+        pos_scores = scores[q_p, p]
+        neg_scores = scores[q_n, n]
 
-        return loss
+        print("------ pos_scores ------")
+        print(pos_scores.size())
+        print(pos_scores.unsqueeze(1).size())
+        print("------ neg_scores ------")
+        print(neg_scores.size())
+        print(neg_scores.unsqueeze(0).size())
+        print("-----------")
+
+        # Compute the score differences
+        score_diffs = pos_scores.unsqueeze(1) - neg_scores.unsqueeze(0)
+
+        # Apply the sigmoid function to the score differences
+        sigmoid_scores = torch.sigmoid(score_diffs)
+
+        # Compute the log likelihood of the sigmoid scores
+        losses = -torch.log(sigmoid_scores + c_f.small_val(scores.dtype))  # Add epsilon for numerical stability
+
+        # Calculate the average loss
+        mean_loss = torch.mean(losses)
+
+        return {
+            "loss": {
+                "losses": mean_loss,
+                "indices": None,
+                "reduction_type": "already_reduced",
+            }
+        }

@@ -2,5 +2,5 @@
 
 defaults:
   - csv.yaml
-  #  - tensorboard.yaml
-  - wandb.yaml
+  - tensorboard.yaml
+  # - wandb.yaml
