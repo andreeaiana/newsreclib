@@ -25,6 +25,54 @@ class PPRECModule(AbstractRecommneder):
     and Time-aware News Popularity
 
     Paper: https://aclanthology.org/2021.acl-long.424.pdf
+    
+    Attributes:
+        dataset_attributes:
+            List of news features available in the used dataset.
+        attributes2encode:
+            List of news features used as input to the news encoder.
+        outputs:
+            A dictionary of user-defined attributes needed for metric calculation at the end of each `*_step` of the pipeline.
+        dual_loss_training:
+            Whether to train with two loss functions, i.e., cross-entropy and supervised contrastive losses, aggregated with a weighted average.
+        dual_loss_coef:
+            The weights of each loss, in the case of dual loss training.
+        loss:
+            The criterion to use for training the model. Choose between `cross_entropy_loss', `sup_con_loss`, and `dual`.
+        late_fusion:
+            If ``True``, it trains the model with the standard `early fusion` approach (i.e., learns an explicit user embedding). If ``False``, it use the `late fusion`.
+        temperature:
+            The temperature parameter for the supervised contrastive loss function.
+        use_plm:
+            If ``True``, it will process the data for a petrained language model (PLM) in the news encoder. If ``False``, it will tokenize the news title and abstract to be used initialized with pretrained word embeddings.
+        pretrained_embeddings_path:
+            The filepath for the pretrained embeddings.
+        plm_model:
+            Name of the pretrained language model.
+        frozen_layers:
+            List of layers to freeze during training.
+        embed_dim:
+            Number of features in the text vector.
+        num_heads:
+            The number of heads in the ``MultiheadAttention``.
+        query_dim:
+            The number of features in the query vector.
+        dropout_probability:
+            Dropout probability.
+        top_k_list:
+            List of positions at which to compute rank-based metrics.
+        num_categ_classes:
+            The number of topical categories.
+        num_sent_classes:
+            The number of sentiment classes.
+        save_recs:
+            Whether to save the recommendations (i.e., candidates news and corresponding scores) to disk in JSON format.
+        recs_fpath:
+            Path where to save the list of recommendations and corresponding scores for users.
+        optimizer:
+            Optimizer used for model training.
+        scheduler:
+            Learning rate scheduler.
     """
 
     def __init__(
@@ -58,6 +106,8 @@ class PPRECModule(AbstractRecommneder):
         top_k_list: List[int],
         num_categ_classes: int,
         num_sent_classes: int,
+        save_recs: bool,
+        recs_fpath: Optional[str],
         optimizer: torch.optim.Optimizer,
         scheduler: torch.optim.lr_scheduler,
     ) -> None:
@@ -69,6 +119,9 @@ class PPRECModule(AbstractRecommneder):
 
         self.num_categ_classes = self.hparams.num_categ_classes + 1
         self.num_sent_classes = self.hparams.num_sent_classes + 1
+
+        if self.hparams.save_recs:
+            assert isinstance(self.hparams.recs_fpath, str)
 
         # initialize loss
         if not self.hparams.dual_loss_training:
