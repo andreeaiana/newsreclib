@@ -55,13 +55,13 @@ class UserInfo:
 
     def sort_click(self):
         """Sorts user clicks by time in ascending order."""
-        self.train_news = np.array(self.train_news, dtype="int32")
+        self.train_news = np.array(self.train_news)
         self.train_time = np.array(self.train_time, dtype="int32")
 
-        self.test_news = np.array(self.test_news, dtype="int32")
+        self.test_news = np.array(self.test_news)
         self.test_time = np.array(self.test_time, dtype="int32")
 
-        self.hist_news = np.array(self.hist_news, dtype="int32")
+        self.hist_news = np.array(self.hist_news)
         self.hist_time = np.array(self.hist_time, dtype="int32")
 
         order = np.argsort(self.train_time)

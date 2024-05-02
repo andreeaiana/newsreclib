@@ -293,20 +293,23 @@ class AdressaDataFrame(Dataset):
                 self.id2index_filenames["subcateg2index"],
             )
 
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 sentiment2index_fpath = os.path.join(
                     self.dst_dir,
                     self.id2index_filenames["sentiment2index"],
                 )
 
-            # compute sentiment classes
-            log.info("Computing sentiments.")
-            news["sentiment_preds"] = news["title"].progress_apply(
-                lambda text: self.sentiment_annotator(text)
-            )
-            news["sentiment_class"], news["sentiment_score"] = zip(*news["sentiment_preds"])
-            news.drop(columns=["sentiment_preds"], inplace=True)
-            log.info("Sentiments computation completed.")
+                # compute sentiment classes
+                log.info("Computing sentiments.")
+                news["sentiment_preds"] = news["title"].progress_apply(
+                    lambda text: self.sentiment_annotator(text)
+                )
+                news["sentiment_class"], news["sentiment_score"] = zip(*news["sentiment_preds"])
+                news.drop(columns=["sentiment_preds"], inplace=True)
+                log.info("Sentiments computation completed.")
 
             if not self.use_plm:
                 # tokenize text
@@ -347,7 +350,10 @@ class AdressaDataFrame(Dataset):
             )
 
             # compute sentiment classes
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 # sentiment2index map
                 log.info("Constructing sentiment2index map.")
                 news_sentiment = news["sentiment_class"].drop_duplicates().reset_index(drop=True)
@@ -362,7 +368,10 @@ class AdressaDataFrame(Dataset):
 
             log.info(f"Number of category classes: {len(categ2index)}.")
             log.info(f"Number of subcategory classes: {len(subcateg2index)}.")
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 log.info(f"Number of sentiment classes: {len(sentiment2index)}.")
 
             if not self.use_plm:
@@ -400,7 +409,10 @@ class AdressaDataFrame(Dataset):
                 lambda subcategory: subcateg2index.get(subcategory, 0)
             )
 
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 news["sentiment_class"] = news["sentiment_class"].progress_apply(
                     lambda sentiment: sentiment2index.get(sentiment, 0)
                 )
@@ -438,8 +450,6 @@ class AdressaDataFrame(Dataset):
                     "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
                 },
             )
-            behaviors["history"] = behaviors["history"].apply(lambda x: [int(e) for e in x])
-            behaviors["candidates"] = behaviors["candidates"].apply(lambda x: [int(e) for e in x])
 
         else:
             log.info("User behaviors data not parsed. Loading and preprocessing raw data.")
@@ -468,12 +478,12 @@ class AdressaDataFrame(Dataset):
                 log.info("Constructing behaviors.")
                 self.train_lines = []
                 self.test_lines = []
-                for uindex in tqdm(user_info):
-                    uinfo = user_info[uindex]
+                for uid in tqdm(user_info):
+                    uinfo = user_info[uid]
                     train_news = uinfo.train_news
                     test_news = uinfo.test_news
                     hist_news = uinfo.hist_news
-                    self._construct_behaviors(uindex, hist_news, train_news, test_news, news_title)
+                    self._construct_behaviors(uid, hist_news, train_news, test_news, news_title)
 
                 shuffle(self.train_lines)
                 shuffle(self.test_lines)
@@ -498,11 +508,11 @@ class AdressaDataFrame(Dataset):
                 low_memory=False,
             )
 
+            behaviors["uid"] = behaviors["uid"].apply(lambda x: "U" + str(x))
             behaviors["history"] = behaviors["history"].fillna("").str.split()
-            behaviors["history"] = behaviors["history"].apply(lambda x: [int(e) for e in x])
             behaviors["impressions"] = behaviors["impressions"].str.split()
             behaviors["candidates"] = behaviors["impressions"].apply(
-                lambda x: [int(impression.split("-")[0]) for impression in x]
+                lambda x: [impression.split("-")[0] for impression in x]
             )
             behaviors["labels"] = behaviors["impressions"].apply(
                 lambda x: [int(impression.split("-")[1]) for impression in x]
@@ -640,7 +650,7 @@ class AdressaDataFrame(Dataset):
                 f.writelines(news_lines)
 
     def _process_users(
-        self, filepath: str, nid2index: Dict[str, int]
+        self, filepath: str, nid2index: Dict[str, str]
     ) -> Tuple[Dict[str, int], Dict[int, Any]]:
         """Processes user behaviors.
 
@@ -666,12 +676,12 @@ class AdressaDataFrame(Dataset):
                         and event_dict["id"] in nid2index
                     ):
                         nindex = nid2index[event_dict["id"]]
-                        uid = "U" + str(event_dict["userId"])
+                        uid = str(event_dict["userId"])
 
                         if uid not in uid2index:
                             uid2index[uid] = len(uid2index)
 
-                        user_index = uid2index[uid]
+                        user_index = "U" + str(uid2index[uid])
                         click_time = int(event_dict["time"])
                         if self.dataset_size == "one_week":
                             date = int(file.name[-1])
@@ -681,40 +691,43 @@ class AdressaDataFrame(Dataset):
 
         return uid2index, user_info
 
-    def _construct_behaviors(self, uindex, hist_news, train_news, test_news, news_title) -> None:
+    def _construct_behaviors(self, uid, hist_news, train_news, test_news, news_title) -> None:
         probs = np.ones(len(news_title) + 1, dtype="float32")
-        probs[hist_news] = 0
-        probs[train_news] = 0
-        probs[test_news] = 0
+
+        hist_news_indices = [int(news.split("N")[-1]) for news in hist_news]
+        train_news_indices = [int(news.split("N")[-1]) for news in train_news]
+        test_news_indices = [int(news.split("N")[-1]) for news in test_news]
+
+        probs[hist_news_indices] = 0
+        probs[train_news_indices] = 0
+        probs[test_news_indices] = 0
+
         probs[0] = 0
         probs /= probs.sum()
 
-        train_hist_news = [str(i) for i in hist_news.tolist()]
-        train_hist_line = " ".join(train_hist_news)
+        train_hist_line = " ".join(hist_news.tolist())
 
         for nindex in train_news:
             neg_cand = np.random.choice(
                 len(news_title) + 1, size=self.neg_num, replace=False, p=probs
             ).tolist()
-            cand_news = " ".join(
-                [f"{str(nindex)}-1"] + [f"{str(nindex)}-0" for nindex in neg_cand]
-            )
+            neg_cand = ["N" + str(cand) for cand in neg_cand]
+            cand_news = " ".join([f"{nindex}-1"] + [f"{nindex}-0" for nindex in neg_cand])
 
-            train_behavior_line = f"{uindex}\t{train_hist_line}\t{cand_news}\n"
+            train_behavior_line = f"{uid}\t{train_hist_line}\t{cand_news}\n"
             self.train_lines.append(train_behavior_line)
 
-        test_hist_news = [str(i) for i in hist_news.tolist() + train_news.tolist()]
+        test_hist_news = hist_news.tolist() + train_news.tolist()
         test_hist_line = " ".join(test_hist_news)
 
         for nindex in test_news:
             neg_cand = np.random.choice(
                 len(news_title) + 1, size=self.neg_num, replace=False, p=probs
             ).tolist()
-            cand_news = " ".join(
-                [f"{str(nindex)}-1"] + [f"{str(nindex)}-0" for nindex in neg_cand]
-            )
+            neg_cand = ["N" + str(cand) for cand in neg_cand]
+            cand_news = " ".join([f"{nindex}-1"] + [f"{nindex}-0" for nindex in neg_cand])
 
-            test_behavior_line = f"{uindex}\t{test_hist_line}\t{cand_news}\n"
+            test_behavior_line = f"{uid}\t{test_hist_line}\t{cand_news}\n"
             self.test_lines.append(test_behavior_line)
 
     def _write_behavior_files(self, behavior_lines, stage: str) -> None:
