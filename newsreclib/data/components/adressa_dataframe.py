@@ -267,7 +267,6 @@ class AdressaDataFrame(Dataset):
                 names=columns_names,
                 usecols=range(len(columns_names)),
             )
-            news["nid"] = news["nid"].apply(lambda x: "N" + str(x))
 
             if not self.use_plm:
                 word2index_fpath = os.path.join(
@@ -682,7 +681,7 @@ class AdressaDataFrame(Dataset):
                         if uid not in uid2index:
                             uid2index[uid] = len(uid2index)
 
-                        user_index = "U" + uid2index[uid]
+                        user_index = "U" + str(uid2index[uid])
                         click_time = int(event_dict["time"])
                         if self.dataset_size == "one_week":
                             date = int(file.name[-1])
