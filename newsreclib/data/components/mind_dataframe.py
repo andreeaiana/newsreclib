@@ -283,7 +283,10 @@ class MINDDataFrame(Dataset):
                 "transformed_entity_embeddings",
             )
 
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 sentiment2index_fpath = os.path.join(
                     self.data_dir,
                     "MIND" + self.dataset_size + "_train",
@@ -371,7 +374,10 @@ class MINDDataFrame(Dataset):
                 )
 
                 # compute sentiment classes
-                if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+                if (
+                    "sentiment_class" in self.dataset_attributes
+                    or "sentiment_score" in self.dataset_attributes
+                ):
                     # sentiment2index map
                     log.info("Constructing sentiment2index map.")
                     news_sentiment = (
@@ -402,13 +408,19 @@ class MINDDataFrame(Dataset):
                 # load subcateg2index map
                 subcateg2index = file_utils.load_idx_map_as_dict(subcateg2index_fpath)
 
-                if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
-                    # load subcateg2index map
+                if (
+                    "sentiment_class" in self.dataset_attributes
+                    or "sentiment_score" in self.dataset_attributes
+                ):
+                    # load sentiment2index map
                     sentiment2index = file_utils.load_idx_map_as_dict(sentiment2index_fpath)
 
             log.info(f"Number of category classes: {len(categ2index)}.")
             log.info(f"Number of subcategory classes: {len(subcateg2index)}.")
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 log.info(f"Number of sentiment classes: {len(sentiment2index)}.")
 
             if not self.use_plm:
@@ -466,7 +478,10 @@ class MINDDataFrame(Dataset):
                 lambda row: self._filter_entities(row, entity2index)
             )
 
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 news["sentiment_class"] = news["sentiment_class"].progress_apply(
                     lambda sentiment: sentiment2index.get(sentiment, 0)
                 )
