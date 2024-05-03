@@ -31,7 +31,7 @@ setup(
         "sphinx==5.0.2",
         "tokenizers==0.15.2",
         "torchmetrics==1.3.1",
-        "tqdm==4.65.0",
+        "tqdm==4.66.3",
         "transformers==4.38.0",
         "wandb==0.15.3",
         "hydra-colorlog==1.2.0",
