@@ -24,7 +24,7 @@ setup(
         "torchaudio==2.0.2",
         "pytorch-lightning==2.0.3",
         "pytorch-metric-learning==2.2.0",
-        "requests==2.31.0",
+        "requests==2.32.0",
         "rich==13.3.5",
         "scikit-learn==1.2.2",
         "seaborn==0.12.2",
