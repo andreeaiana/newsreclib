@@ -18,6 +18,9 @@ import newsreclib.utils as utils
 from newsreclib import utils
 from datetime import datetime, timezone, timedelta
 
+from newsreclib.data.components.get_metrics import get_news_metrics_bucket
+from newsreclib.data.components.get_ctr import _get_ctr
+
 tqdm.pandas()
 
 log = utils.get_pylogger(__name__)
@@ -103,7 +106,7 @@ class MINDDataFrame(Dataset):
         train: bool,
         validation: bool,
         download: bool,
-        include_ctr: Optional[bool],
+        include_ctr: Optional[bool] = False,
     ) -> None:
         super().__init__()
 
@@ -177,8 +180,6 @@ class MINDDataFrame(Dataset):
         self.word_embeddings_fpath = word_embeddings_fpath
 
         self.news, self.behaviors = self.load_data()
-        self.news_metrics_bucket = None
-        self.articles_est_pbt_time = None
 
     def __getitem__(self, index) -> Tuple[Any, Any, Any]:
         user_bhv = self.behaviors.iloc[index]
@@ -225,50 +226,48 @@ class MINDDataFrame(Dataset):
         file_prefix = ""
         if self.data_split == "train":
             file_prefix = "train_" if not self.validation else "val_"
-        parsed_bhv_ctr_file = os.path.join(
-            self.dst_dir, file_prefix + "parsed_behaviors_ctr.tsv")
+        parsed_bhv_file_ = os.path.join(self.dst_dir, file_prefix + "parsed_behaviors_ctr.tsv")
 
-        if file_utils.check_integrity(parsed_bhv_ctr_file):
+        if file_utils.check_integrity(parsed_bhv_file_):
             log.info("CTR has already been added.")
             # behaviors already parsed
             log.info(
-                f"User behaviors already parsed. Loading from {parsed_bhv_ctr_file}.")
+                f"User behaviors already parsed. Loading from {parsed_bhv_file_}.")
             behaviors = pd.read_table(
-                filepath_or_buffer=parsed_bhv_ctr_file,
+                filepath_or_buffer=parsed_bhv_file_,
                 converters={
                     "history": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
                     "history_ctr": lambda x: literal_eval(x),
                     "candidates": lambda x: literal_eval(x),
-                    "cand_num_clicks_acc": lambda x: literal_eval(x),
+                    "cand_num_clicks": lambda x: literal_eval(x),
                     "candidates_ctr": lambda x: literal_eval(x),
                 }
             )
         else:
-            # Load news metrics bucket file
-            news_metrics_bucket_ptb, news_metrics_bucket_acc = self._load_news_metrics_bucket()
-
-            log.info("Adding CTR information into behaviors file...")
             # Get pickle file for estimated publish time
             log.info('Loading news articles publish time...')
             article2published = self.get_est_publish_time(unique_ids)
             log.info('News articles publish time loaded.')
-            acc = True # TODO: add ptb configuration
-            if acc:
-                # Parse behaviors to add ctr information
-                behaviors = self._get_ctr(article2published=article2published, behaviors=behaviors, news_metrics_bucket=news_metrics_bucket_acc)
+            # Load news metrics bucket file
+            news_metrics_bucket = self._load_news_metrics_bucket(article2published)
 
-            else:
-                # Parse behaviors to add ctr information
-                behaviors = self._get_ctr(article2published=article2published, behaviors=behaviors, news_metrics_bucket=news_metrics_bucket_ptb)
+            log.info("Adding CTR information into behaviors file...")
+            # Parse behaviors to add ctr information
+            behaviors = _get_ctr(
+                article2published=article2published, 
+                behaviors=behaviors, 
+                news_metrics_bucket=news_metrics_bucket
+            )
 
             # Save behaviors file with ctr information
-            file_utils.to_tsv(behaviors, parsed_bhv_ctr_file)
+            file_utils.to_tsv(behaviors, parsed_bhv_file_)
             log.info("CTR information added to behaviors file!")
 
         # Parse candidates_ctr as a list of tuples. NOTE:
         return behaviors
+
 
     def _load_news(self) -> pd.DataFrame:
         """Loads the parsed news. If not already parsed, loads and preprocesses the raw news data.
@@ -600,7 +599,8 @@ class MINDDataFrame(Dataset):
                     "history": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
-                }
+                },
+                # nrows=100
             )
         else:
             log.info("User behaviors not parsed. Loading and parsing raw data.")
@@ -852,7 +852,7 @@ class MINDDataFrame(Dataset):
         bucket_str = f"{start_hour.strftime(date_hour_format)} to {end_hour.strftime('%H:00')}"
 
         # Return both the bucket string and the end_hour as a datetime object
-        return bucket_str, end_hour
+        return bucket_str, start_hour, end_hour
 
     def extract_bucket_info(self, row):
         """Extracts information for each impression."""
@@ -862,9 +862,10 @@ class MINDDataFrame(Dataset):
         for news_id, clicked in row['impressions_split']:
             if news_id not in article_set:
                 article_set.add(news_id)
-                time_bucket, time_bucket_end_hour = self.get_bucket(time)
+                time_bucket, time_bucket_start_hour, time_bucket_end_hour = self.get_bucket(time)
                 yield {
                     'time_bucket': time_bucket,
+                    'time_bucket_start_hour': time_bucket_start_hour,
                     'time_bucket_end_hour': time_bucket_end_hour,
                     'news_id': news_id,
                     'clicked': int(clicked),
@@ -874,69 +875,9 @@ class MINDDataFrame(Dataset):
     # Convert the 'impressions' column into a more manageable format
     def parse_impressions(self, impressions):
         """Parse the impressions string into a list of tuples (news_id, clicked)."""
-        return [imp.split('-') for imp in impressions]
+        return [imp.split('-') for imp in impressions]    
 
-    def _get_nmb_ptb(self, bucket_info, path_nmb_pkl):
-        # Compute num_clicks_ptb and exposures by grouping by 'time_bucket' and 'news_id'
-        news_metrics_bucket = bucket_info.groupby(['time_bucket', 'news_id', 'time_bucket_end_hour']).agg(
-            num_clicks_ptb=('clicked', 'sum'),
-            exposures_ptb=('clicked', 'count')
-        ).reset_index()
-
-        # Compute total number of impressions per time bucket
-        total_impressions_ptb = bucket_info.groupby(
-            'time_bucket').size().reset_index(name='total_impressions_ptb')
-
-        # Merge article metrics with total impressions to get all information together
-        news_metrics_bucket = pd.merge(
-            news_metrics_bucket, total_impressions_ptb, on='time_bucket')
-
-        # Save news metrics bucket into csv and pickle     
-        news_metrics_bucket.to_pickle(path_nmb_pkl)
-        log.info("(ptb) News metric bucket file created!")
-
-        return news_metrics_bucket
-
-    def _get_nmb_acc(self, bucket_info, path_nmb_acc):
-        # --- Compute ptb logic first
-        # Compute num_clicks and exposures by grouping by 'time_bucket' and 'news_id'
-        news_metrics_bucket = bucket_info.groupby(['time_bucket', 'news_id', 'time_bucket_end_hour']).agg(
-            num_clicks_ptb=('clicked', 'sum'),
-            exposures_ptb=('clicked', 'count')
-        ).reset_index()
-
-        # Compute total number of impressions per time bucket
-        total_impressions_ptb = bucket_info.groupby(
-            'time_bucket').size().reset_index(name='total_impressions_ptb')
-
-        # Merge to get the total impressions per time bucket alongside the news_metrics
-        news_metrics_bucket = pd.merge(
-            news_metrics_bucket, total_impressions_ptb, on='time_bucket')
-
-        # --- Compute acc logic now
-        # Sort the DataFrame by 'news_id' and 'time_bucket' to ensure correct order for cumulative sum
-        news_metrics_bucket = news_metrics_bucket.sort_values(by=['news_id', 'time_bucket'])
-
-        # Calculate cumulative sums for 'num_clicks_ptb' and 'exposures_ptb' to get 'num_clicks_acc' and 'exposures_acc'
-        news_metrics_bucket['num_clicks_acc'] = news_metrics_bucket.groupby('news_id')[
-            'num_clicks_ptb'].cumsum()
-        news_metrics_bucket['exposures_acc'] = news_metrics_bucket.groupby('news_id')[
-            'exposures_ptb'].cumsum()
-
-        # Compute cumulative total impressions as well
-        news_metrics_bucket['total_impressions_acc'] = news_metrics_bucket.groupby(
-            'news_id')['total_impressions_ptb'].cumsum()
-
-        # Remove temporary per-time-bucket (ptb) metrics
-        news_metrics_bucket = news_metrics_bucket.drop(['num_clicks_ptb', 'exposures_ptb', 'total_impressions_ptb'], axis=1)
-
-        # Save news metrics bucket into csv and pickle
-        news_metrics_bucket.to_pickle(path_nmb_acc)
-        log.info("(acc) News metric bucket file created!")
-
-        return news_metrics_bucket
-
-    def _load_news_metrics_bucket(self):
+    def _load_news_metrics_bucket(self, article2published: pd.DataFrame):
         """
         News Metric Bucket - nmb
 
@@ -950,10 +891,6 @@ class MINDDataFrame(Dataset):
         os.makedirs(path_folder, exist_ok=True)
 
         path_bucket = os.path.join(path_folder, "mind_news_bucket.tsv")
-        path_nmb_pkl_acc = os.path.join(
-            path_folder, "mind_news_metrics_bucket_acc.pkl")
-        path_nmb_pkl_ptb = os.path.join(
-            path_folder, "mind_news_metrics_bucket_ptb.pkl") # TODO: add this file as an option to the acc 
 
         path_behaviors_train = os.path.join(
             self.data_dir, "MIND" + self.dataset_size + "_train" + "/behaviors.tsv"
@@ -961,9 +898,11 @@ class MINDDataFrame(Dataset):
         path_behaviors_dev = os.path.join(
             self.data_dir, "MIND" + self.dataset_size + "_dev" + "/behaviors.tsv"
         )
+        
+        path = os.path.join(path_folder, "mind_news_metrics_bucket.pkl")
 
-        if not file_utils.check_integrity(path_nmb_pkl_acc):
-            log.info("Creating news metric bucket file...")
+        if not file_utils.check_integrity(path_bucket):
+            log.info(f"Creating news metric bucket file...")
             # Load train behaviors
             behaviors_train = pd.read_table(
                 filepath_or_buffer=path_behaviors_train,
@@ -999,226 +938,17 @@ class MINDDataFrame(Dataset):
             # Save bucket info
             file_utils.to_tsv(bucket_info, path_bucket)
             log.info("News bucket info file created!")
+        else:
+            bucket_info = pd.read_table(path_bucket)
 
-            # --- Metrics computed using per time bucket (ptb) logic
-            news_metrics_bucket_ptb = self._get_nmb_ptb(
-                bucket_info, path_nmb_pkl_ptb)
-
-            # --- Metrics computed using accumulative logic (acc)
-            news_metrics_bucket_acc = self._get_nmb_acc(
-                bucket_info, path_nmb_pkl_acc)
+        if not file_utils.check_integrity(path):
+            news_metrics_bucket = get_news_metrics_bucket(
+                bucket_info=bucket_info,
+                path=path,
+                article2published=article2published,
+            )
         else:
             log.info("News metric bucket file already created!")
-            news_metrics_bucket_acc = pd.read_pickle(path_nmb_pkl_acc)
-            news_metrics_bucket_ptb = pd.read_pickle(path_nmb_pkl_ptb)
+            news_metrics_bucket = pd.read_pickle(path)
 
-        return news_metrics_bucket_ptb, news_metrics_bucket_acc
-
-    def aux_lst_f(self, series):
-        """
-        Define a custom aggregation function to create tuples of (history_news_id, num_clicks_acc)
-        """
-        return list(series)
-    
-    def _get_history_ctr(self, behaviors: pd.DataFrame, news_metrics_bucket: pd.DataFrame) -> any:
-        # Explode the 'history' column to individual rows for easier processing
-        bhv_hist_explode = behaviors.explode('history')
-        bhv_hist_explode = bhv_hist_explode.rename(columns={'history': 'history_news_id'})
-        bhv_hist_explode['time'] = pd.to_datetime(bhv_hist_explode['time'])
-
-        # Filter the metrics bucket to include only news_ids present in bhv_hist_explode for efficiency
-        unique_ids_metrics_bucket = news_metrics_bucket['news_id'].unique().tolist()
-        bhv_hist_explode_filter = bhv_hist_explode[bhv_hist_explode['history_news_id'].isin(unique_ids_metrics_bucket)]
-
-        # Merge filtered behaviors with metrics on news_id
-        merged_df = pd.merge(bhv_hist_explode_filter, news_metrics_bucket, left_on='history_news_id', right_on='news_id', how='left')
-
-        # Select entries where the behavioral event time is within the time bucket range
-        valid_entries = merged_df[
-            (merged_df['time'] >= merged_df['time_bucket_start_hour']) & 
-            (merged_df['time'] <= merged_df['time_bucket_end_hour'])
-        ]
-        valid_entries = valid_entries.sort_values(by='time', ascending=False)
-        final_df = valid_entries.drop_duplicates(subset=['history_news_id', 'time'], keep='first')
-
-        # Reintegrate CTR data back to behaviors, filling gaps with zero where no data was found
-        bhv_hist_ctr_acc = pd.merge(
-            bhv_hist_explode_filter, 
-            final_df[['history_news_id', 'time', 'num_clicks_acc']], 
-            on=['history_news_id', 'time'], 
-            how='left'
-        )
-        bhv_hist_ctr_acc['num_clicks_acc'] = bhv_hist_ctr_acc['num_clicks_acc'].fillna(0)
-        bhv_hist_ctr_acc = bhv_hist_ctr_acc.drop_duplicates(subset=['history_news_id', 'time', 'num_clicks_acc'])
-
-        # Reaggregate to match the original data granularity and form a history column with CTR data
-        final_df = pd.merge(
-            bhv_hist_explode,
-            bhv_hist_ctr_acc[['history_news_id', 'impid', 'user', 'time', 'num_clicks_acc']],
-            on=['history_news_id', 'impid', 'user', 'time'],
-            how='left'
-        )
-
-        final_df['num_clicks_acc'] = final_df['num_clicks_acc'].fillna(0)
-        final_df['num_clicks_acc'] = final_df['num_clicks_acc'].astype(int)
-
-        result_df = final_df.groupby(['impid', 'user', 'time']).agg({
-            'history_news_id': list,
-            'num_clicks_acc': self.aux_lst_f
-        }).reset_index()
-        result_df['history_ctr'] = result_df.apply(lambda x: list(zip(x['history_news_id'], x['num_clicks_acc'])), axis=1)
-        result_df = result_df.rename(columns={'history_news_id': 'history'})
-
-         # Validate that merged data matches original behaviors data
-        behaviors['time'] = pd.to_datetime(behaviors['time'])
-        result_df['time'] = pd.to_datetime(result_df['time'])
-        behaviors_ = pd.merge(behaviors, result_df, on=['impid', 'user', 'time'], how='inner')
-        diff_mask = behaviors_['history_x'] != behaviors_['history_y']
-        different_indexes = behaviors_.index[diff_mask].tolist()
-
-        # Ensure no discrepancies exist
-        assert len(different_indexes) == 0
-
-        # Drop the 'history_y' column
-        behaviors_ = behaviors_.drop(columns=['history_y'])
-
-        # Rename 'history_x' to 'history'
-        behaviors_ = behaviors_.rename(columns={'history_x': 'history'})
-        behaviors_ = behaviors_.rename(columns={'num_clicks_acc': 'hist_num_clicks_acc'})
-
-        return behaviors_
-
-
-    def _get_candidate_ctr(self, behaviors: pd.DataFrame, news_metrics_bucket: pd.DataFrame, article2published: any) -> any:
-        # Explode the 'candidates' column to individual rows for easier processing
-        bhv_cand_explode = behaviors.explode('candidates')
-        bhv_cand_explode = bhv_cand_explode.rename(columns={'candidates': 'cand_news_id'})
-        bhv_cand_explode['pb_time'] = bhv_cand_explode['cand_news_id'].map(article2published)
-        bhv_cand_explode['time'] = pd.to_datetime(bhv_cand_explode['time'])
-
-        # Filter the metrics bucket to include only news_ids present in bhv_cand_explode for efficiency
-        unique_ids_metrics_bucket = news_metrics_bucket['news_id'].unique().tolist()
-        bhv_cand_explode_filter = bhv_cand_explode[bhv_cand_explode['cand_news_id'].isin(unique_ids_metrics_bucket)]
-
-        # Merge filtered behaviors with metrics on news_id
-        merged_df = pd.merge(bhv_cand_explode_filter, news_metrics_bucket, left_on='cand_news_id', right_on='news_id', how='left')
-
-        # Select entries where the behavioral event time is within the time bucket range
-        valid_entries = merged_df[
-            (merged_df['time'] >= merged_df['time_bucket_start_hour']) & 
-            (merged_df['time'] <= merged_df['time_bucket_end_hour'])
-        ]
-        valid_entries = valid_entries.sort_values(by='time', ascending=False)
-        final_df = valid_entries.drop_duplicates(subset=['cand_news_id', 'time'], keep='first')
-
-        # Reintegrate CTR data back to behaviors, filling gaps with zero where no data was found
-        bhv_cand_ctr_acc = pd.merge(
-            bhv_cand_explode_filter, 
-            final_df[['cand_news_id', 'time', 'num_clicks_acc']], 
-            on=['cand_news_id', 'time'], 
-            how='left'
-        )
-        bhv_cand_ctr_acc['num_clicks_acc'] = bhv_cand_ctr_acc['num_clicks_acc'].fillna(0)
-        bhv_cand_ctr_acc = bhv_cand_ctr_acc.drop_duplicates(subset=['cand_news_id', 'time', 'num_clicks_acc'])
-
-        # Reaggregate to match the original data granularity and form a cand column with CTR data
-        final_df = pd.merge(
-            bhv_cand_explode,
-            bhv_cand_ctr_acc[['cand_news_id', 'impid', 'user', 'time', 'num_clicks_acc']],
-            on=['cand_news_id', 'impid', 'user', 'time'],
-            how='left'
-        )
-        final_df['num_clicks_acc'] = final_df['num_clicks_acc'].fillna(0)
-        final_df['num_clicks_acc'] = final_df['num_clicks_acc'].astype(int)
-
-        # Get recency column
-        final_df['time'] = pd.to_datetime(final_df['time'])
-        final_df['cand_recency'] = (final_df['time'] - final_df['pb_time']).dt.total_seconds() / 3600
-        final_df['cand_recency'] = final_df['cand_recency'].astype(int)
-
-        # check if there's any negative value on the recency column
-        assert False == (final_df['cand_recency'] < 0).any()
-
-        result_df = final_df.groupby(['impid', 'user', 'time']).agg({
-            'cand_news_id': list,
-            'num_clicks_acc': self.aux_lst_f,
-            'cand_recency': self.aux_lst_f,
-        }).reset_index()
-
-        result_df = result_df.rename(columns={'cand_news_id': 'candidates'})
-        result_df = result_df.rename(columns={'num_clicks_acc': 'cand_num_clicks_acc'})
-
-        # compute candidates_ctr
-        result_df['candidates_ctr'] = result_df.apply(lambda x: list(zip(x['candidates'], x['cand_num_clicks_acc'], x['cand_recency'])), axis=1)
-
-        # Validate that merged data matches original behaviors data
-        behaviors['time'] = pd.to_datetime(behaviors['time'])
-        behaviors_ = pd.merge(behaviors, result_df, on=['impid', 'user', 'time'], how='inner')
-        diff_mask = behaviors_['candidates_x'] != behaviors_['candidates_y']
-        different_indexes = behaviors_.index[diff_mask].tolist()
-
-        # Ensure no discrepancies exist
-        assert len(different_indexes) == 0
-
-        # Drop the 'candidates_y' column
-        behaviors_ = behaviors_.drop(columns=['candidates_y'])
-
-        # Rename 'cand_x' to 'cand'
-        behaviors_ = behaviors_.rename(columns={'candidates_x': 'candidates'})
-        behaviors_ = behaviors_.rename(columns={'num_clicks_acc': 'cand_num_clicks_acc'})
-
-        return behaviors_
-
-    def _get_ctr(self, behaviors: pd.DataFrame, news_metrics_bucket: pd.DataFrame, article2published: any) -> any:
-        """
-        Calculate the CTR for each news article over its respective time buckets from the news_metrics_bucket DataFrame.
-        It matches news articles by ID and checks that the behavioral event time falls within the designated time buckets.
-        
-        Parameters:
-            behaviors (pd.DataFrame): DataFrame containing user behavior data.
-            news_metrics_bucket (pd.DataFrame): DataFrame with metrics for each news article over specific time buckets.
-            row (any): Unused in this snippet, but typically used for row-specific operations.
-            article2published (any): Unused in this snippet, could be used for mapping articles to published info.
-
-        Returns:
-            pd.DataFrame: Behaviors DataFrame enriched with the CTR information and checks for data consistency.
-
-        Example usage:
-            - Input DataFrame row: {'news_id': 'N3128', 'time_bucket': '11/13/2019 14:00 to 15:00', 'num_clicks_acc': 152}
-            - Output: CTR values merged back into the original behaviors DataFrame.
-        """
-        # Assign impid to the index
-        behaviors = behaviors.reset_index(names='impid')
-
-        # Split the 'time_bucket' into two separate columns for start and end times
-        time_bounds = news_metrics_bucket['time_bucket'].str.split(' to ', expand=True)
-        news_metrics_bucket['time_bucket_start_hour'] = time_bounds[0]
-
-        # Convert the new start and end time columns to datetime
-        news_metrics_bucket['time_bucket_start_hour'] = pd.to_datetime(news_metrics_bucket['time_bucket_start_hour'], format='%m/%d/%Y %H:%M')
-        news_metrics_bucket['time_bucket_end_hour'] = pd.to_datetime(news_metrics_bucket['time_bucket_end_hour'], format='%m/%d/%Y %H:%M')
-
-        # Get CTR for history column
-        df_history_ctr = self._get_history_ctr(behaviors=behaviors, news_metrics_bucket=news_metrics_bucket)
-
-        # Get CTR for candidates column
-        df_candidate_ctr = self._get_candidate_ctr(behaviors=behaviors, news_metrics_bucket=news_metrics_bucket, article2published=article2published)
-
-        # Join informations
-        behaviors = pd.merge(
-            behaviors, 
-            df_history_ctr[['impid', 'history_ctr', 'hist_num_clicks_acc']], 
-            on='impid', 
-            how='left'
-        )
-        behaviors = pd.merge(
-            behaviors, 
-            df_candidate_ctr[['impid', 'cand_num_clicks_acc', 'cand_recency', 'candidates_ctr']], 
-            on='impid', 
-            how='left'
-        )
-
-        return behaviors
-
-       
-
+        return news_metrics_bucket

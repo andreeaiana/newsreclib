@@ -6,7 +6,6 @@ from omegaconf import DictConfig
 
 from newsreclib.utils import pylogger, rich_utils
 
-from halo import Halo
 from functools import wraps
 from collections import defaultdict
 from datetime import datetime
@@ -130,18 +129,6 @@ def get_metric_value(metric_dict: dict, metric_name: str) -> float:
     log.info(f"Retrieved metric value! <{metric_name}={metric_value}>")
 
     return metric_value
-
-
-def metrics_spinner(func):
-    """
-    Wraper function to show to the user that the evaluation metrics 
-    are being calculated.
-    """
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        with Halo(text="Calculating Evaluation Metrics...", spinner="dots"):
-            return func(*args, **kwargs)
-    return wrapper
 
 
 def get_article2clicks(behaviors_path_train: str, behaviors_path_dev: str):

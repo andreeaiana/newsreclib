@@ -182,7 +182,7 @@ class RecommendationDatasetTest(MINDDataFrame):
         if self.include_ctr:
             # -- Get History CTR
             history_ctr = np.array(bhv["history_ctr"])[: self.max_history_len]
-            history, history_ctr = zip(*history_ctr)
+            history, history_ctr, _ = zip(*history_ctr)
             # convert to np array
             history = np.array(history)
             history_ctr = np.array(history_ctr)
