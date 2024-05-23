@@ -45,7 +45,6 @@ class RecommendationDatasetTrain(MINDDataFrame):
     def __getitem__(self, index: Any) -> Tuple[np.ndarray, pd.DataFrame, pd.DataFrame, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         bhv = self.behaviors.iloc[index]
 
-        user = np.array([int(bhv["user"])])
         user_id = np.array([int(bhv["uid"].split("U")[-1])])
         user_idx = np.array([int(bhv["user"])])
 
