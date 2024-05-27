@@ -135,6 +135,7 @@ class AdressaRecDataModule(LightningDataModule):
         num_workers: int,
         pin_memory: bool,
         drop_last: bool,
+        include_ctr: Optional[bool],
     ) -> None:
         super().__init__()
 
@@ -187,6 +188,7 @@ class AdressaRecDataModule(LightningDataModule):
             train=True,
             validation=False,
             download=True,
+            include_ctr=self.hparams.include_ctr,
         )
 
         # download validation set
@@ -212,6 +214,7 @@ class AdressaRecDataModule(LightningDataModule):
             train=False,
             validation=False,
             download=True,
+            include_ctr=self.hparams.include_ctr,
         )
 
     def setup(self, stage: Optional[str] = None):
@@ -244,6 +247,7 @@ class AdressaRecDataModule(LightningDataModule):
                 train=True,
                 validation=False,
                 download=False,
+                include_ctr=self.hparams.include_ctr,
             )
             validset = AdressaDataFrame(
                 seed=self.hparams.seed,
@@ -267,6 +271,7 @@ class AdressaRecDataModule(LightningDataModule):
                 train=True,
                 validation=True,
                 download=False,
+                include_ctr=self.hparams.include_ctr,
             )
             testset = AdressaDataFrame(
                 seed=self.hparams.seed,
@@ -290,6 +295,7 @@ class AdressaRecDataModule(LightningDataModule):
                 train=False,
                 validation=False,
                 download=False,
+                include_ctr=self.hparams.include_ctr,
             )
 
             self.data_train = RecommendationDatasetTrain(
@@ -297,16 +303,19 @@ class AdressaRecDataModule(LightningDataModule):
                 behaviors=trainset.behaviors,
                 max_history_len=self.hparams.max_history_len,
                 neg_sampling_ratio=self.hparams.neg_sampling_ratio,
+                include_ctr=self.hparams.include_ctr,
             )
             self.data_val = RecommendationDatasetTest(
                 news=validset.news,
                 behaviors=validset.behaviors,
                 max_history_len=self.hparams.max_history_len,
+                include_ctr=self.hparams.include_ctr,
             )
             self.data_test = RecommendationDatasetTest(
                 news=testset.news,
                 behaviors=testset.behaviors,
                 max_history_len=self.hparams.max_history_len,
+                include_ctr=self.hparams.include_ctr,
             )
 
     def train_dataloader(self):
@@ -320,6 +329,7 @@ class AdressaRecDataModule(LightningDataModule):
                 max_title_len=self.hparams.max_title_len if not self.hparams.use_plm else None,
                 max_abstract_len=self.hparams.max_abstract_len,
                 concatenate_inputs=self.hparams.concatenate_inputs,
+                include_ctr=self.hparams.include_ctr,
             ),
             shuffle=True,
             num_workers=self.hparams.num_workers,
@@ -338,6 +348,7 @@ class AdressaRecDataModule(LightningDataModule):
                 max_title_len=self.hparams.max_title_len,
                 max_abstract_len=self.hparams.max_abstract_len,
                 concatenate_inputs=self.hparams.concatenate_inputs,
+                include_ctr=self.hparams.include_ctr,
             ),
             shuffle=False,
             num_workers=self.hparams.num_workers,
@@ -356,6 +367,7 @@ class AdressaRecDataModule(LightningDataModule):
                 max_title_len=self.hparams.max_title_len if not self.hparams.use_plm else None,
                 max_abstract_len=self.hparams.max_abstract_len,
                 concatenate_inputs=self.hparams.concatenate_inputs,
+                include_ctr=self.hparams.include_ctr,
             ),
             shuffle=False,
             num_workers=self.hparams.num_workers,

@@ -6,6 +6,11 @@ from omegaconf import DictConfig
 
 from newsreclib.utils import pylogger, rich_utils
 
+from functools import wraps
+from collections import defaultdict
+from datetime import datetime
+import pandas as pd
+
 log = pylogger.get_pylogger(__name__)
 
 
@@ -124,3 +129,68 @@ def get_metric_value(metric_dict: dict, metric_name: str) -> float:
     log.info(f"Retrieved metric value! <{metric_name}={metric_value}>")
 
     return metric_value
+
+
+def get_article2clicks(behaviors_path_train: str, behaviors_path_dev: str):
+    """
+    Get a dictionary that maps the number of clicks per hour per news article
+
+    Arguments:
+        - behaviors_path_train: path for the train behaviors file
+        - behaviors_path_dev: path for the dev behaviors file
+
+    we need both behaviors to compute the estimate of their publish time
+    """
+    column_names = ["impid", "uid", "time", "history", "impressions"]
+
+    df_behaviors_train = pd.read_table(
+        filepath_or_buffer=behaviors_path_train,
+        header=None,
+        names=column_names,
+        usecols=range(len(column_names))
+    )
+
+    df_behaviors_val = pd.read_table(
+        filepath_or_buffer=behaviors_path_dev,
+        header=None,
+        names=column_names,
+        usecols=range(len(column_names))
+    )
+
+    # ---- Join all news behaviors
+    total_behaviors = pd.concat([df_behaviors_train, df_behaviors_val])
+    total_behaviors['history'] = total_behaviors['history'].fillna(" ")
+    total_behaviors.impressions = total_behaviors.impressions.str.split()
+
+    article2published = {}
+    article2clicks = defaultdict(list)
+    article2impression = {}
+    for _, behavior in total_behaviors.iterrows():
+        time = datetime.strptime(behavior["time"], "%m/%d/%Y %I:%M:%S %p")
+        for article_id_and_clicked in behavior["impressions"]:
+            article_id = article_id_and_clicked[:-2]  # article id ex: N113723
+            article_clicked = article_id_and_clicked[
+                -1
+            ]  # 0 (not clicked) and 1 (clicked)
+            
+            # Keep a dict to know which news articles appeared on the impression list
+            article2impression[article_id] = 1
+
+            # Track the first time an article appears and add that time occurance as publish time
+            if (
+                article_id not in article2published
+                or time < article2published[article_id]
+            ):
+                article2published[article_id] = time
+
+            # Append the hour when the article was clicked
+            if article_clicked == "1":
+                article2clicks[article_id].append(time)
+
+    # --- Sort article2clicks dictionary
+    for article_id, clicks in article2clicks.items():
+        clicks.sort()
+        for i, click in enumerate(clicks):
+            clicks[i] = (click - article2published[article_id]).total_seconds() // 3600
+
+    return article2published, article2clicks, article2impression

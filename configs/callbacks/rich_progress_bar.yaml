@@ -2,3 +2,5 @@
 
 rich_progress_bar:
   _target_: lightning.pytorch.callbacks.RichProgressBar
+  # TODO: evaluate if this could work https://github.com/Lightning-AI/pytorch-lightning/issues/2189#issuecomment-1913550357
+  # leave: True 

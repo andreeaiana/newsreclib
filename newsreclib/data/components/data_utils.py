@@ -5,6 +5,8 @@ from typing import Dict, List, Optional
 
 import numpy as np
 from tqdm import tqdm
+from collections import defaultdict
+from datetime import datetime
 
 from newsreclib import utils
 from newsreclib.data.components.download_utils import (
@@ -154,3 +156,47 @@ def download_and_extract_pretrained_embeddings(
             tar.close()
 
         log.info("Pretrained embedding extraction completed.")
+
+
+def get_article2clicks_mind(df_behaviors):
+    """
+    Get the time news articles were published. For the MIND dataset, 
+    since this information is not available, it'll be obtained based 
+    on their first appearance on the impression column. 
+
+    Args:
+    df_behaviors:
+            Behaviors dataframe
+    """
+    article2published = {}
+    article2clicks = defaultdict(list)
+    for _, behavior in df_behaviors.iterrows():
+        if isinstance(behavior["time"], str):
+            time = datetime.strptime(behavior["time"], "%m/%d/%Y %I:%M:%S %p")
+        else:
+            time = behavior["time"]
+        for article_id_and_clicked in behavior["impressions"]:
+            article_id = article_id_and_clicked[:-2]  # article id ex: N113723
+            article_clicked = article_id_and_clicked[
+                -1
+            ]  # 0 (not clicked) and 1 (clicked)
+
+            # Track the first time an article appears and add that time occurance as publish time
+            if (
+                article_id not in article2published
+                or time < article2published[article_id]
+            ):
+                article2published[article_id] = time
+
+            # Append the hour when the article was clicked
+            if article_clicked == "1":
+                article2clicks[article_id].append(time)
+
+    # --- Sort article2clicks dictionary
+    for article_id, clicks in article2clicks.items():
+        clicks.sort()
+        for i, click in enumerate(clicks):
+            clicks[i] = (click - article2published[article_id]
+                         ).total_seconds() // 3600
+
+    return article2published, article2clicks

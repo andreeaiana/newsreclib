@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from newsreclib.models.components.layers.attention import AdditiveAttention
+from newsreclib.models.components.layers.custom_transformer import MultiheadAttention
 
 
 class UserEncoder(nn.Module):
@@ -24,10 +25,12 @@ class UserEncoder(nn.Module):
         super().__init__()
 
         # initialize
-        self.multihead_attention = nn.MultiheadAttention(
+        self.multihead_attention = MultiheadAttention(
             embed_dim=news_embed_dim, num_heads=num_heads
         )
-        self.additive_attention = AdditiveAttention(input_dim=news_embed_dim, query_dim=query_dim)
+        self.additive_attention = AdditiveAttention(
+            input_dim=news_embed_dim, query_dim=query_dim
+        )
 
     def forward(self, hist_news_vector: torch.Tensor) -> torch.Tensor:
         # batch_size, num_clicked_news_user, news_embed_dim

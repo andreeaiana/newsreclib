@@ -21,6 +21,14 @@ class RecommendationBatch(TypedDict):
             Original user IDs of the users included in the batch.
         user_idx:
             Indices of users included in the batch (e.g., for creating embedding matrix).
+        times: Optional
+            Times for each impression
+        x_hist_ctr: Optional
+            Click through rate for history
+        x_cand_ctr: Optional
+            Click through rate for candidates
+        x_cand_rec: Optional
+            Recency for candidates
     """
 
     batch_hist: torch.Tensor
@@ -30,6 +38,10 @@ class RecommendationBatch(TypedDict):
     labels: torch.Tensor
     user_ids: torch.Tensor
     user_idx: torch.Tensor
+    times: torch.Tensor
+    x_hist_ctr: torch.Tensor
+    x_cand_ctr: torch.Tensor
+    x_cand_rec: torch.Tensor
 
 
 class NewsBatch(TypedDict):

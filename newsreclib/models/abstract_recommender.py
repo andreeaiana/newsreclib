@@ -8,7 +8,7 @@ from torch.nn import CrossEntropyLoss
 from torchmetrics import MeanMetric, MinMetric
 
 from newsreclib.data.components.batch import RecommendationBatch
-from newsreclib.models.components.losses import SupConLoss
+from newsreclib.models.components.losses import SupConLoss, BPRLoss
 
 
 class AbstractRecommneder(LightningModule):
@@ -118,6 +118,8 @@ class AbstractRecommneder(LightningModule):
             loss = SupConLoss()
         elif criterion == "dual_loss":
             loss = CrossEntropyLoss(), SupConLoss()
+        elif criterion == "BPR_pairwise_loss":
+            loss = BPRLoss()
         else:
             raise ValueError(f"Loss not defined: {self.hparams.loss}")
 

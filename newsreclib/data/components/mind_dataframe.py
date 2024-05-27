@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
+import pickle
 import torch.nn as nn
 from omegaconf.dictconfig import DictConfig
 from torch.utils.data import Dataset
@@ -13,7 +14,12 @@ from tqdm import tqdm
 
 import newsreclib.data.components.data_utils as data_utils
 import newsreclib.data.components.file_utils as file_utils
+import newsreclib.utils as utils 
 from newsreclib import utils
+from datetime import datetime, timezone, timedelta
+
+from newsreclib.data.components.get_metrics import get_news_metrics_bucket
+from newsreclib.data.components.get_ctr import _get_ctr
 
 tqdm.pandas()
 
@@ -73,6 +79,8 @@ class MINDDataFrame(Dataset):
             If ``True`` and `train` is also``True``, the data will be processed and used for validation. If ``False`` and `train` is `True``, the data will be processed ad used for training. If ``False`` and `train` is `False``, the data will be processed and used for testing.
         download:
             Whether to download the dataset, if not already downloaded.
+        include_ctr:
+            Controling if we should include CTR or not into history/candidates
     """
 
     def __init__(
@@ -98,6 +106,7 @@ class MINDDataFrame(Dataset):
         train: bool,
         validation: bool,
         download: bool,
+        include_ctr: Optional[bool] = False,
     ) -> None:
         super().__init__()
 
@@ -106,6 +115,8 @@ class MINDDataFrame(Dataset):
         self.data_dir = data_dir
         self.dataset_attributes = dataset_attributes
         self.id2index_filenames = id2index_filenames
+
+        self.include_ctr = include_ctr
 
         self.use_plm = use_plm
         self.use_pretrained_categ_embeddings = use_pretrained_categ_embeddings
@@ -135,18 +146,22 @@ class MINDDataFrame(Dataset):
         )
 
         if download:
-            url = dataset_url[dataset_size][self.data_split]
-            log.info(
-                f"Downloading MIND{self.dataset_size} dataset for {self.data_split} from {url}."
-            )
-            data_utils.download_and_extract_dataset(
-                data_dir=self.data_dir,
-                url=url,
-                filename=url.split("/")[-1],
-                extract_compressed=True,
-                dst_dir=self.dst_dir,
-                clean_archive=False,
-            )
+            for data_type in ["train", "dev"]:
+                dst_dir_ = os.path.join(
+                    self.data_dir, "MIND" + self.dataset_size + "_" + data_type
+                )
+                url = dataset_url[dataset_size][data_type]
+                log.info(
+                    f"Downloading MIND{self.dataset_size} dataset for {data_type} from {url}."
+                )
+                data_utils.download_and_extract_dataset(
+                    data_dir=self.data_dir,
+                    url=url,
+                    filename=url.split("/")[-1],
+                    extract_compressed=True,
+                    dst_dir=dst_dir_,
+                    clean_archive=False,
+                )
 
             if not self.use_plm or self.use_pretrained_categ_embeddings:
                 assert isinstance(pretrained_embeddings_url, str)
@@ -157,7 +172,8 @@ class MINDDataFrame(Dataset):
                     url=pretrained_embeddings_url,
                     pretrained_embeddings_fpath=word_embeddings_fpath,
                     filename=pretrained_embeddings_url.split("/")[-1],
-                    dst_dir=os.path.join(self.data_dir, word_embeddings_dirname),
+                    dst_dir=os.path.join(
+                        self.data_dir, word_embeddings_dirname),
                     clean_archive=True,
                 )
 
@@ -187,6 +203,7 @@ class MINDDataFrame(Dataset):
         Returns:
             Tuple of news and behaviors datasets.
         """
+        log.info(f"Loading data from: {self.dst_dir}")
         news = self._load_news()
         log.info(f"News data size: {len(news)}")
 
@@ -195,7 +212,62 @@ class MINDDataFrame(Dataset):
             f"Behaviors data size for data split {self.data_split}, validation={self.validation}: {len(behaviors)}"
         )
 
+        if self.include_ctr:
+            unique_ids_news = news.index.unique().tolist()
+            behaviors = self._load_behaviors_ctr(behaviors, unique_ids_news)
+
         return news, behaviors
+
+    def _load_behaviors_ctr(self, behaviors: pd.DataFrame, unique_ids: list) -> pd.DataFrame:
+        """ Load the parsed behaviors with CTR information.
+        If it does not already have the information of CTR load it.
+        """
+        # Check if behaviors file with CTR already exists
+        file_prefix = ""
+        if self.data_split == "train":
+            file_prefix = "train_" if not self.validation else "val_"
+        parsed_bhv_file_ = os.path.join(self.dst_dir, file_prefix + "parsed_behaviors_ctr.tsv")
+
+        if file_utils.check_integrity(parsed_bhv_file_):
+            log.info("CTR has already been added.")
+            # behaviors already parsed
+            log.info(
+                f"User behaviors already parsed. Loading from {parsed_bhv_file_}.")
+            behaviors = pd.read_table(
+                filepath_or_buffer=parsed_bhv_file_,
+                converters={
+                    "history": lambda x: x.strip("[]").replace("'", "").split(", "),
+                    "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
+                    "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
+                    "history_ctr": lambda x: literal_eval(x),
+                    "candidates": lambda x: literal_eval(x),
+                    "cand_num_clicks": lambda x: literal_eval(x),
+                    "candidates_ctr": lambda x: literal_eval(x),
+                }
+            )
+        else:
+            # Get pickle file for estimated publish time
+            log.info('Loading news articles publish time...')
+            article2published = self.get_est_publish_time(unique_ids)
+            log.info('News articles publish time loaded.')
+            # Load news metrics bucket file
+            news_metrics_bucket = self._load_news_metrics_bucket(article2published)
+
+            log.info("Adding CTR information into behaviors file...")
+            # Parse behaviors to add ctr information
+            behaviors = _get_ctr(
+                article2published=article2published, 
+                behaviors=behaviors, 
+                news_metrics_bucket=news_metrics_bucket
+            )
+
+            # Save behaviors file with ctr information
+            file_utils.to_tsv(behaviors, parsed_bhv_file_)
+            log.info("CTR information added to behaviors file!")
+
+        # Parse candidates_ctr as a list of tuples. NOTE:
+        return behaviors
+
 
     def _load_news(self) -> pd.DataFrame:
         """Loads the parsed news. If not already parsed, loads and preprocesses the raw news data.
@@ -215,12 +287,14 @@ class MINDDataFrame(Dataset):
 
             attributes2convert = ["title_entities", "abstract_entities"]
             if not self.use_plm:
-                attributes2convert.extend(["tokenized_title", "tokenized_abstract"])
+                attributes2convert.extend(
+                    ["tokenized_title", "tokenized_abstract"])
             news = pd.read_table(
                 filepath_or_buffer=parsed_news_file,
-                converters={attribute: literal_eval for attribute in attributes2convert},
+                converters={
+                    attribute: literal_eval for attribute in attributes2convert},
             )
-            news["abstract"].fillna("", inplace=True)
+            news["abstract"] = news["abstract"].fillna("")
         else:
             log.info("News not parsed. Loading and parsing raw data.")
             columns_names = [
@@ -242,9 +316,15 @@ class MINDDataFrame(Dataset):
             news = news.drop(columns=["url"])
 
             # replace missing values
-            news["abstract"].fillna("", inplace=True)
-            news["title_entities"].fillna("[]", inplace=True)
-            news["abstract_entities"].fillna("[]", inplace=True)
+            news["abstract"] = news["abstract"].fillna("")
+            news["title_entities"] = news["title_entities"].fillna("[]")
+            news["abstract_entities"] = news["abstract_entities"].fillna("[]")
+
+            # add estimated publish time column
+            log.info('Loading news articles publish time...')
+            article2published = self.get_est_publish_time(news["nid"].unique().tolist())
+            log.info('News articles publish time loaded.')
+            news["est_publish_time"] = news["nid"].map(article2published)
 
             if not self.use_plm:
                 word2index_fpath = os.path.join(
@@ -299,7 +379,7 @@ class MINDDataFrame(Dataset):
                     lambda text: self.sentiment_annotator(text)
                 )
                 news["sentiment_class"], news["sentiment_score"] = zip(*news["sentiment_preds"])
-                news.drop(columns=["sentiment_preds"], inplace=True)
+                news = news.drop(columns=["sentiment_preds"])
                 log.info("Sentiments computation completed.")
 
             if self.data_split == "train":
@@ -394,6 +474,25 @@ class MINDDataFrame(Dataset):
 
             else:
                 log.info("Loading indices maps.")
+
+                # compute sentiment classes
+                if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+                    # sentiment2index map
+                    log.info("Constructing sentiment2index map.")
+                    news_sentiment = (
+                        news["sentiment_class"].drop_duplicates(
+                        ).reset_index(drop=True)
+                    )
+                    sentiment2index = {v: k + 1 for k,
+                                       v in news_sentiment.to_dict().items()}
+                    log.info(
+                        f"Saving sentiment2index map of size {len(sentiment2index)} in {sentiment2index_fpath}"
+                    )
+                    file_utils.to_tsv(
+                        df=pd.DataFrame(sentiment2index.items(), columns=[
+                                        "sentiment", "index"]),
+                        fpath=sentiment2index_fpath,
+                    )
 
                 if not self.use_plm:
                     # load word2index map
@@ -516,6 +615,7 @@ class MINDDataFrame(Dataset):
                     "candidates": lambda x: x.strip("[]").replace("'", "").split(", "),
                     "labels": lambda x: list(map(int, x.strip("[]").split(", "))),
                 },
+                # nrows=100
             )
         else:
             log.info("User behaviors not parsed. Loading and parsing raw data.")
@@ -526,7 +626,7 @@ class MINDDataFrame(Dataset):
                 filepath_or_buffer=os.path.join(self.dst_dir, "behaviors.tsv"),
                 header=None,
                 names=column_names,
-                usecols=range(len(column_names)),
+                usecols=range(len(column_names))
             )
 
             # parse behaviors
@@ -605,7 +705,9 @@ class MINDDataFrame(Dataset):
 
             # cache parsed behaviors
             log.info(f"Caching parsed behaviors of size {len(behaviors)} to {parsed_bhv_file}.")
-            behaviors = behaviors[["uid", "user", "history", "candidates", "labels"]]
+            
+            behaviors = behaviors[["uid", "user", "history", "candidates", "labels", "time"]]
+
             file_utils.to_tsv(behaviors, parsed_bhv_file)
 
         return behaviors
@@ -656,3 +758,212 @@ class MINDDataFrame(Dataset):
             entity_embedding_transformed,
             allow_pickle=True,
         )
+
+    def get_est_publish_time(self, unique_ids: Optional[object] = None) -> Dict:
+        """
+        Retrieves the estimated publish time for news articles specifically for the MIND dataset, 
+        which lacks direct publish time data. This function integrates data from two pickle files 
+        to provide comprehensive publish time estimates.
+
+        The first pickle file is generated using the utility method `get_article2clicks` from the 
+        `utils` module, which outputs 'articles_est_pbt_time.pkl'. This file estimates publish times 
+        based on article clicks.
+
+        The second file, 'articles_timeDict_103630.pkl', is provided by the research detailed in 
+        the paper "Positive, Negative and Neutral: Modeling Implicit Feedback in Session-based 
+        News Recommendation". However, this file occasionally lists publish times that post-date 
+        the actual article clicks, which is logically inconsistent.
+
+        By merging data from both sources, this function aims to correct these inconsistencies 
+        and provide a more accurate estimation of article publish times.
+
+        Parameters:
+            unique_ids (set): A set of news article IDs for which publish times are to be estimated.
+
+        Returns:
+            dict: A dictionary mapping news article IDs to their estimated publish times.
+
+        References:
+            - [Session-based News Recommendation GitHub Repository](https://github.com/summmeer/session-based-news-recommendation)
+            - [Related GitHub Issue Discussion](https://github.com/summmeer/session-based-news-recommendation/issues/6#issuecomment-1233830425)
+
+        Example Usage:
+            >>> unique_ids = {'N1001', 'N1002', 'N1003'}
+            >>> publish_times = get_estimated_publish_time(unique_ids)
+            >>> print(publish_times)
+        """
+        
+        # -- Check if we already have this file
+        upt_path = os.path.join(self.data_dir, "updated_articles_publish_time.pkl")
+        if file_utils.check_integrity(upt_path):
+            return pd.read_pickle(upt_path)
+        else:
+            est_pb_time = os.path.join(self.data_dir, "articles_est_pbt_time.pkl")
+            if file_utils.check_integrity(est_pb_time):
+                articles_est_pbt = pd.read_pickle(est_pb_time)
+            else:
+                articles_est_pbt = self.get_est_pbt_click_time()
+                # Save DataFrame to a pickle file
+                pbt_path = os.path.join(self.data_dir, "articles_est_pbt_time.pkl")
+                with open(pbt_path, 'wb') as file:
+                    # Save dict as a pickle file
+                    pickle.dump(articles_est_pbt, file)
+        
+            # -- load the other pickle file
+            time_dict_path = os.path.join(self.data_dir, "articles_timeDict_103630.pkl")
+            articles_time_dict = pd.read_pickle(time_dict_path)
+
+            # Update articles_est_pbt with missing data from articles_time_dict
+            # Check if there is any news article missing, in case there is the value assigned will be earliest from article2published
+            earliest_date = min(articles_est_pbt.values())
+            for key in unique_ids:
+                if key not in articles_est_pbt:
+                    if key in articles_time_dict:
+                        articles_est_pbt[key] = articles_time_dict[key]
+                    else:
+                        articles_est_pbt[key] = earliest_date
+                
+            # -- Save the updated dictionary to a new pickle file
+            with open(upt_path, 'wb') as handle:
+                log.info('news articles publish time saved.')
+                pickle.dump(articles_est_pbt, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+            return articles_est_pbt
+
+    def get_est_pbt_click_time(self):
+        """
+        In the case for news articles that are not on articles_timeDict_103630.pkl file
+        we need to get the publication from another logic. The idea is to estimate the 
+        publication time based on the first click happened from the behaviors file. 
+        """
+        behaviors_path_train = os.path.join(
+            self.data_dir, "MIND" + self.dataset_size + "_train/behaviors.tsv"
+        )
+        behaviors_path_dev = os.path.join(
+            self.data_dir, "MIND" + self.dataset_size + "_dev/behaviors.tsv"
+        )
+        article2published, _, _ = utils.get_article2clicks(behaviors_path_train, behaviors_path_dev)
+
+        return article2published
+
+
+    def get_bucket(self, time):
+        """Get the equivalent time bucket for the specific time 
+        object received as an input.
+        """
+        # Convert the input string to a datetime object
+        time = datetime.strptime(time, "%m/%d/%Y %I:%M:%S %p")
+
+        # Define the format to include day, month, year, and hour
+        date_hour_format = '%m/%d/%Y %H:00'  # Adjusted to match your input format
+
+        # Start of the hour for the given time
+        start_hour = time.replace(minute=0, second=0, microsecond=0)
+
+        # End of the hour (start of the next hour)
+        end_hour = start_hour + pd.Timedelta(hours=1)
+
+        # Format the time bucket string
+        bucket_str = f"{start_hour.strftime(date_hour_format)} to {end_hour.strftime('%H:00')}"
+
+        # Return both the bucket string and the end_hour as a datetime object
+        return bucket_str, start_hour, end_hour
+
+    def extract_bucket_info(self, row):
+        """Extracts information for each impression."""
+        article_set = set()  # make sure we don't process any news article twice for same impression
+        user_id = row["user"]
+        time = row["time"]
+        for news_id, clicked in row['impressions_split']:
+            if news_id not in article_set:
+                article_set.add(news_id)
+                time_bucket, time_bucket_start_hour, time_bucket_end_hour = self.get_bucket(time)
+                yield {
+                    'time_bucket': time_bucket,
+                    'time_bucket_start_hour': time_bucket_start_hour,
+                    'time_bucket_end_hour': time_bucket_end_hour,
+                    'news_id': news_id,
+                    'clicked': int(clicked),
+                    'user_id': user_id
+                }
+
+    # Convert the 'impressions' column into a more manageable format
+    def parse_impressions(self, impressions):
+        """Parse the impressions string into a list of tuples (news_id, clicked)."""
+        return [imp.split('-') for imp in impressions]    
+
+    def _load_news_metrics_bucket(self, article2published: pd.DataFrame):
+        """
+        News Metric Bucket - nmb
+
+        Get a dataframe that reports news article news_metrics_bucket per time bucket.
+
+        This dataframe needs to be calculated considering both train and dev dataframes.
+        We're simulating a near real time information.
+        """
+        path_folder = os.path.join(self.data_dir, "MIND" + "_" + self.dataset_size + "_metrics_bucket")
+        # Ensure the folder exists
+        os.makedirs(path_folder, exist_ok=True)
+
+        path_bucket = os.path.join(path_folder, "mind_news_bucket.tsv")
+
+        path_behaviors_train = os.path.join(
+            self.data_dir, "MIND" + self.dataset_size + "_train" + "/behaviors.tsv"
+        )
+        path_behaviors_dev = os.path.join(
+            self.data_dir, "MIND" + self.dataset_size + "_dev" + "/behaviors.tsv"
+        )
+        
+        path = os.path.join(path_folder, "mind_news_metrics_bucket.pkl")
+
+        if not file_utils.check_integrity(path_bucket):
+            log.info(f"Creating news metric bucket file...")
+            # Load train behaviors
+            behaviors_train = pd.read_table(
+                filepath_or_buffer=path_behaviors_train,
+                header=None,
+                index_col=["impression_id"],
+                names=["impression_id", "user", "time",
+                       "clicked_news", "impressions"]
+            )
+
+            # Load dev behaviors
+            behaviors_dev = pd.read_table(
+                filepath_or_buffer=path_behaviors_dev,
+                header=None,
+                index_col=["impression_id"],
+                names=["impression_id", "user", "time",
+                       "clicked_news", "impressions"]
+            )
+
+            # Join the two behaviors
+            behaviors = pd.concat([behaviors_train, behaviors_dev])
+            behaviors.clicked_news = behaviors.clicked_news.fillna(" ")
+            behaviors.impressions = behaviors.impressions.str.split()
+
+            # Let's split impressions column to make it easier
+            behaviors['impressions_split'] = behaviors['impressions'].apply(
+                self.parse_impressions)
+
+            # Apply the function and create a new DataFrame
+            bucket_info = pd.DataFrame(
+                [info for _, row in tqdm(behaviors.iterrows(), total=len(behaviors)) for info in self.extract_bucket_info(row)]
+            )
+
+            # Save bucket info
+            file_utils.to_tsv(bucket_info, path_bucket)
+            log.info("News bucket info file created!")
+        else:
+            bucket_info = pd.read_table(path_bucket)
+
+        if not file_utils.check_integrity(path):
+            news_metrics_bucket = get_news_metrics_bucket(
+                bucket_info=bucket_info,
+                path=path,
+                article2published=article2published,
+            )
+        else:
+            log.info("News metric bucket file already created!")
+            news_metrics_bucket = pd.read_pickle(path)
+
+        return news_metrics_bucket

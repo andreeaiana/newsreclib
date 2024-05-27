@@ -2,7 +2,8 @@ defaults:
   - model_checkpoint.yaml
   - early_stopping.yaml
   - model_summary.yaml
-  - rich_progress_bar.yaml
+  # - rich_progress_bar.yaml
+  - tqdm_progress_bar.yaml # use tqdm when loggin to a file
   - _self_
 
 model_checkpoint:

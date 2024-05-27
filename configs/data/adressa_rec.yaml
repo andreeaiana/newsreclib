@@ -33,6 +33,7 @@ id2index_filenames:
   sentiment2index: "sentiment2index.tsv"
   uid2index: "uid2index.tsv"
   nid2index: "nid2index.tsv"
+  publishtime2index: "publishtime2index.tsv"
 
 use_plm: False
 use_pretrained_categ_embeddings: True
@@ -64,3 +65,4 @@ batch_size: 64
 num_workers: 0
 pin_memory: True
 drop_last: False
+include_ctr: False

@@ -1,0 +1,2 @@
+tqdm_progress_bar:
+  _target_: lightning.pytorch.callbacks.TQDMProgressBar

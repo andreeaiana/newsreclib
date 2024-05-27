@@ -1,0 +1,64 @@
+_target_: newsreclib.models.fair_rec.pprec_module.PPRECModule
+
+# training strategy
+dual_loss_training: False
+dual_loss_coef: null
+loss: "BPR_pairwise_loss"
+temperature: None
+
+# news encoder
+dataset_attributes: ${data.dataset_attributes}
+attributes2encode: ["title", "title_entities"]
+use_plm: False
+use_entities: True
+
+# text encoder
+# parameters from the code https://github.com/taoqi98/PP-Rec and from the actual paper
+pretrained_embeddings_path: null
+plm_model: null
+frozen_layers: null
+query_dim: 200
+dropout_probability: 0.2
+pop_num_embeddings: 500
+pop_embedding_dim: 400
+hidden_dim_pop_predictor: 100
+rec_num_emb_pop_predictor: 1500
+rec_emb_dim_pop_predictor: 100
+text_embed_dim: 300
+text_num_heads: 20
+entity_embed_dim: 100
+entity_num_heads: 20
+categ_embed_dim: 100
+cpja_hidden_dim: 100
+
+# outputs
+outputs:
+  train: ["preds", "targets", "cand_news_size"]
+  val: ["preds", "targets", "cand_news_size"]
+  test:
+    [
+      "preds",
+      "targets",
+      "cand_news_size",
+      "hist_news_size",
+      "target_categories",
+      "target_sentiments",
+      "hist_categories",
+      "hist_sentiments",
+      "user_ids",
+      "cand_news_ids",
+    ]
+
+# evaluation
+top_k_list: [5, 10]
+num_categ_classes: 18
+num_sent_classes: 3
+save_recs: False
+recs_fpath: "${paths.output_dir}/recommendations.json"
+
+optimizer:
+  _target_: torch.optim.Adam
+  _partial_: true
+  lr: 0.0001
+
+scheduler: null

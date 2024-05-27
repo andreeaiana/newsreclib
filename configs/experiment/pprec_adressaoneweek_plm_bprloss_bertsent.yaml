@@ -1,0 +1,50 @@
+# @package _global_
+
+# to execute this experiment run:
+# python train.py experiment=example
+
+defaults:
+  - override /data: adressa_rec.yaml
+  - override /model: pprec.yaml
+  - override /callbacks: default.yaml
+  - override /logger: many_loggers.yaml
+  - override /trainer: gpu.yaml
+
+# all parameters below will be merged with parameters from default configurations set above
+# this allows you to overwrite only specified parameters
+
+tags: ["pprec", "adressa_oneweek", "plm", "bprloss", "bertsent"]
+seed: 42
+
+data:
+  use_plm: True
+  tokenizer_name: roberta-base
+  tokenizer_use_fast: True
+  tokenizer_max_len: 96
+  batch_size: 8
+  include_ctr: True
+  num_workers: 63
+
+model:
+  use_plm: True
+  attributes2encode: ["title"]
+  use_entities: False
+  plm_model: "NbAiLab/nb-bert-base"
+  frozen_layers: [0, 1, 2, 3, 4, 5, 6, 7]
+  text_embed_dim: 768
+  text_num_heads: 16
+  pretrained_entity_embeddings_path: ${paths.data_dir}Adressa_oneweek/transformed_entity_embeddings.npy
+  loss: "BPR_pairwise_loss"
+
+callbacks:
+  early_stopping:
+    patience: 3
+
+trainer:
+  max_epochs: 10
+
+logger:
+  wandb:
+    name: "pprec_adressa_oneweek_plm_bprloss_bertsent_s42"
+    tags: ${tags}
+    group: "adressa"
