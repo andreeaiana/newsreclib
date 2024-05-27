@@ -376,7 +376,10 @@ class AdressaDataFrame(Dataset):
             )
 
             # compute sentiment classes
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 # sentiment2index map
                 log.info("Constructing sentiment2index map.")
                 news_sentiment = news["sentiment_class"].drop_duplicates().reset_index(drop=True)
@@ -391,7 +394,10 @@ class AdressaDataFrame(Dataset):
 
             log.info(f"Number of category classes: {len(categ2index)}.")
             log.info(f"Number of subcategory classes: {len(subcateg2index)}.")
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 log.info(f"Number of sentiment classes: {len(sentiment2index)}.")
 
             if not self.use_plm:
@@ -429,7 +435,10 @@ class AdressaDataFrame(Dataset):
                 lambda subcategory: subcateg2index.get(subcategory, 0)
             )
 
-            if "sentiment_class" or "sentiment_score" in self.dataset_attributes:
+            if (
+                "sentiment_class" in self.dataset_attributes
+                or "sentiment_score" in self.dataset_attributes
+            ):
                 news["sentiment_class"] = news["sentiment_class"].progress_apply(
                     lambda sentiment: sentiment2index.get(sentiment, 0)
                 )
@@ -506,6 +515,7 @@ class AdressaDataFrame(Dataset):
                     test_time = uinfo.test_time
                     hist_news = uinfo.hist_news
                     hist_time = uinfo.hist_time
+                    
                     self._construct_behaviors(
                         uid, 
                         hist_news,
@@ -539,6 +549,7 @@ class AdressaDataFrame(Dataset):
                 usecols=range(len(columns_names)),
                 low_memory=False,
             )
+
 
             # behaviors["uid"] = behaviors["uid"].apply(lambda x: "U" + str(x))
             behaviors["history"] = behaviors["history"].fillna("").str.split()
@@ -815,6 +826,7 @@ class AdressaDataFrame(Dataset):
         probs /= probs.sum()
 
         train_hist_line = " ".join(hist_news.tolist())
+
         train_cand_time = train_time.tolist()
         test_cand_time = test_time.tolist()
 
