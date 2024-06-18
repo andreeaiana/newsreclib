@@ -26,7 +26,7 @@ setup(
         "pytorch-metric-learning==2.2.0",
         "requests==2.31.0",
         "rich==13.3.5",
-        "scikit-learn==1.2.2",
+        "scikit-learn==1.5.0",
         "seaborn==0.12.2",
         "sphinx==5.0.2",
         "tokenizers==0.15.2",
