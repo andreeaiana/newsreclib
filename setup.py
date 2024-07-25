@@ -19,7 +19,7 @@ setup(
         "omegaconf==2.3.0",
         "pandas==1.5.3",
         "torch_geometric==2.3.0",
-        "torch==2.0.1",
+        "torch==2.2.0",
         "torchvision==0.15.2",
         "torchaudio==2.0.2",
         "pytorch-lightning==2.0.3",
