@@ -12,13 +12,13 @@ def test_mind_rec_small_datamodule(batch_size):
     dataset_size = "small"  # URLs for downloading the dataset
     dataset_url = {
         "large": {
-            "train": "https://mind201910small.blob.core.windows.net/release/MINDlarge_train.zip",
-            "dev": "https://mind201910small.blob.core.windows.net/release/MINDlarge_dev.zip",
+            "train": "https://recodatasets.z20.web.core.windows.net/newsrec/MINDlarge_train.zip",
+            "dev": "https://recodatasets.z20.web.core.windows.net/newsrec/MINDlarge_dev.zip"
         },
-        "small": {
-            "train": "https://mind201910small.blob.core.windows.net/release/MINDsmall_train.zip",
-            "dev": "https://mind201910small.blob.core.windows.net/release/MINDsmall_dev.zip",
-        },
+        "small":
+            "train": "https://recodatasets.z20.web.core.windows.net/newsrec/MINDsmall_train.zip"
+            "dev": "https://recodatasets.z20.web.core.windows.net/newsrec/MINDsmall_dev.zip"
+        }
     }
     pretrained_embeddings_url = "https://nlp.stanford.edu/data/glove.840B.300d.zip"
     data_dir = "data/"
