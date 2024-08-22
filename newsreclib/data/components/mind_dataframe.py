@@ -148,8 +148,7 @@ class MINDDataFrame(Dataset):
                 clean_archive=False,
             )
 
-            if False:
-            # if not self.use_plm or self.use_pretrained_categ_embeddings:
+            if not self.use_plm or self.use_pretrained_categ_embeddings:
                 assert isinstance(pretrained_embeddings_url, str)
                 assert isinstance(word_embeddings_dirname, str)
                 assert isinstance(word_embeddings_fpath, str)
