@@ -233,8 +233,12 @@ class MINDDataFrame(Dataset):
                 "title_entities",
                 "abstract_entities",
             ]
+            # The output folder is actually wrapped in a subdir of the same name
+            # TODO: There is probably a nicer way to handle this
+            subdir = os.path.split(os.path.dirname(parsed_news_file))[-1]
+
             news = pd.read_table(
-                filepath_or_buffer=os.path.join(self.dst_dir, "news.tsv"),
+                filepath_or_buffer=os.path.join(self.dst_dir, subdir, "news.tsv"),
                 header=None,
                 names=columns_names,
                 usecols=range(len(columns_names)),

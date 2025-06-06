@@ -6,11 +6,11 @@ dataset_size: large # choose from 'large' or 'small'
 # URLs for downloading the MIND dataset
 mind_dataset_url:
   large:
-    train: "https://mind201910small.blob.core.windows.net/release/MINDlarge_train.zip"
-    dev: "https://mind201910small.blob.core.windows.net/release/MINDlarge_dev.zip"
+    train: "https://recodatasets.z20.web.core.windows.net/newsrec/MINDlarge_train.zip"
+    dev: "https://recodatasets.z20.web.core.windows.net/newsrec/MINDlarge_dev.zip"
   small:
-    train: "https://mind201910small.blob.core.windows.net/release/MINDsmall_train.zip"
-    dev: "https://mind201910small.blob.core.windows.net/release/MINDsmall_dev.zip"
+    train: "https://recodatasets.z20.web.core.windows.net/newsrec/MINDsmall_train.zip"
+    dev: "https://recodatasets.z20.web.core.windows.net/newsrec/MINDsmall_dev.zip"
 
 # File names and paths
 data_dir: ${paths.data_dir}
